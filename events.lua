@@ -15,20 +15,22 @@ AddEventHandler("aprts_simplequests:server:requestQuests", function()
     local CharID = player.state.Character.CharId
 
     debugPrint("aprts_simplequests:server:requestQuests called by player " .. _source)
-    while not QuestsLoaded do
+    while not QuestsLoaded or not CharacterDataLoaded do
         Citizen.Wait(100)
     end
+    local playerQuests = json.decode(json.encode(Config.Quests))
 
-    while not CharacterDataLoaded do
-        Citizen.Wait(100)
-    end
-    for _, questID in pairs(charQuests[CharID] or {}) do
-        if Config.Quests[questID] then
-            Config.Quests[questID].active = false
+    -- Deaktivujeme splněné questy pro tohoto hráče
+    for _, questID in ipairs(charQuests[CharID] or {}) do
+        if playerQuests[questID] then
+            playerQuests[questID].active = false
         end
     end
-    TriggerClientEvent("aprts_simplequests:client:recieveQuests", _source, Config.Quests)
+    TriggerClientEvent("aprts_simplequests:client:recieveQuests", _source, playerQuests)
 end)
+
+
+
 
 RegisterServerEvent("vorp_inventory:useItem")
 AddEventHandler("vorp_inventory:useItem", function(data)

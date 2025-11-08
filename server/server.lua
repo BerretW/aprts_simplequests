@@ -159,17 +159,85 @@ function LOG(player, event, message, ...)
 
 end
 QuestsLoaded = false
+-- function LoadQuests()
+--     MySQL:execute("SELECT * FROM aprts_simplequests_quests WHERE active = 1", {}, function(result)
+--         Config.Quests = {}
+--         if result then
+--             for _, quest in pairs(result) do
+--                 local newQuest = {
+--                     id = quest.id,
+--                     active = quest.active,
+--                     name = quest.name,
+--                     description = quest.description,
+--                     jobs = json.decode(quest.jobs),
+--                     repeatable = quest.repeatable,
+
+--                     start = {
+--                         activation = quest.start_activation,
+--                         param = quest.start_param,
+--                         NPC = quest.start_npc,
+--                         coords = vec4FromString(quest.start_coords),
+--                         text = quest.start_text,
+--                         prompt = json.decode(quest.start_prompt),
+--                         items = json.decode(quest.start_items),
+--                         events = json.decode(quest.start_events),
+--                     },
+--                     target = {
+--                         activation = quest.target_activation,
+--                         param = quest.target_param,
+--                         NPC = quest.target_npc,
+--                         blip = quest.target_blip,
+--                         coords = vec4FromString(quest.target_coords),
+--                         text = quest.target_text,
+--                         prompt = json.decode(quest.target_prompt),
+--                         items = json.decode(quest.target_items),
+--                         money = quest.target_money,
+--                         events = json.decode(quest.target_events), 
+--                     }
+--                 }
+--                 Config.Quests[quest.id] = newQuest
+--             end
+--         end
+--         print("Questy:", json.encode(Config.Quests, {
+--             indent = true
+--         }))
+--         QuestsLoaded = true
+--     end)
+-- end
+
+
+
+-- =================================================================
+-- VYLEPŠENÁ FUNKCE LoadQuests PRO server/server.lua
+-- =================================================================
+QuestsLoaded = false
 function LoadQuests()
     MySQL:execute("SELECT * FROM aprts_simplequests_quests WHERE active = 1", {}, function(result)
-        Config.Quests = {}
-        if result then
-            for _, quest in pairs(result) do
+        local tempQuests = {}
+        if result and #result > 0 then
+            
+            -- Pomocná funkce pro bezpečné dekódování JSONu
+            local function safeJsonDecode(jsonString, questId, columnName)
+                if not jsonString or jsonString == '' or jsonString == 'null' then 
+                    return nil 
+                end
+                
+                local success, data = pcall(json.decode, jsonString)
+                if success then
+                    return data
+                else
+                    print(('[^1[Quests] CHYBA:^7 Nepodařilo se dekódovat JSON v questu s ID ^5%s^7, sloupec: ^5%s^7. Data v DB jsou pravděpodobně poškozená.'):format(tostring(questId), columnName))
+                    return nil -- Vrátíme nil, pokud je JSON neplatný
+                end
+            end
+
+            for _, quest in ipairs(result) do
                 local newQuest = {
                     id = quest.id,
                     active = quest.active,
                     name = quest.name,
                     description = quest.description,
-                    jobs = json.decode(quest.jobs),
+                    jobs = safeJsonDecode(quest.jobs, quest.id, 'jobs'),
                     repeatable = quest.repeatable,
 
                     start = {
@@ -178,9 +246,9 @@ function LoadQuests()
                         NPC = quest.start_npc,
                         coords = vec4FromString(quest.start_coords),
                         text = quest.start_text,
-                        prompt = json.decode(quest.start_prompt),
-                        items = json.decode(quest.start_items),
-                        events = json.decode(quest.start_events),
+                        prompt = safeJsonDecode(quest.start_prompt, quest.id, 'start_prompt'),
+                        items = safeJsonDecode(quest.start_items, quest.id, 'start_items') or {}, -- Pokud je nil, použije se prázdná tabulka
+                        events = safeJsonDecode(quest.start_events, quest.id, 'start_events') or { server = {}, client = {} },
                     },
                     target = {
                         activation = quest.target_activation,
@@ -189,21 +257,28 @@ function LoadQuests()
                         blip = quest.target_blip,
                         coords = vec4FromString(quest.target_coords),
                         text = quest.target_text,
-                        prompt = json.decode(quest.target_prompt),
-                        items = json.decode(quest.target_items),
-                        money = quest.target_money,
-                        events = json.decode(quest.target_events), 
+                        prompt = safeJsonDecode(quest.target_prompt, quest.id, 'target_prompt'),
+                        items = safeJsonDecode(quest.target_items, quest.id, 'target_items') or {},
+                        money = quest.target_money or 0,
+                        events = safeJsonDecode(quest.target_events, quest.id, 'target_events') or { server = {}, client = {} },
                     }
                 }
-                Config.Quests[quest.id] = newQuest
+                tempQuests[quest.id] = newQuest
             end
         end
-        print("Questy:", json.encode(Config.Quests, {
-            indent = true
-        }))
+        
+        Config.Quests = tempQuests -- Až zde přepíšeme globální config
+        
+        if Config.Debug then
+            print("Questy:", json.encode(Config.Quests, { indent = true }))
+        end
+        
+        print(('[^2[Quests]^7 Úspěšně načteno ^5%d^7 questů z databáze.'):format(table.count(Config.Quests)))
         QuestsLoaded = true
     end)
 end
+
+
 
 CharacterDataLoaded = false
 function LoadCharacterData()

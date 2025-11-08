@@ -209,7 +209,7 @@ function finishQuest(questID)
     local quest = Config.Quests[questID]
     notify(quest.target.text)
     giveItems(quest.target.items)
-    TriggerServerEvent("aprts_simplequests:server:giveMoney", quest.start.money)
+    TriggerServerEvent("aprts_simplequests:server:giveMoney", quest.target.money)
     if quest.target.events and quest.target.events.client then
         for _, event in pairs(quest.target.events.client) do
             TriggerEvent(event.name, event.args)
