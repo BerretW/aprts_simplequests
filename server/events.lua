@@ -1,6 +1,5 @@
 
-AddEventHandler("vorp_inventory:useItem")
-RegisterServerEvent("vorp_inventory:useItem", function(data)
+AddEventHandler("vorp_inventory:useItem", function(data)
     local _source = source
     local itemName = data.item
     exports.vorp_inventory:getItemByMainId(_source, data.id, function(data)

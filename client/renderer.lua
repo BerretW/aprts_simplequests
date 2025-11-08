@@ -7,7 +7,6 @@ local function LoadModel(model)
     end
 end
 
-
 local function spawnNPC(model, x, y, z)
     local modelHash = LoadModel(model)
     local npc_ped = CreatePed(model, x, y, z, false, false, false, false)
@@ -53,8 +52,8 @@ Citizen.CreateThread(function()
                     end
                 else
                     if DoesEntityExist(quest.start.obj) then
-                        DeleteEntity(quest.obj)
-                        quest.obj = nil
+                        DeleteEntity(quest.start.obj)
+                        quest.start.obj = nil
                     end
                 end
             end

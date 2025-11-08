@@ -4,7 +4,7 @@ local promptGroup = GetRandomIntInRange(0, 0xffffff)
 ActiveQuestID = 0
 
 Progressbar = exports["feather-progressbar"]:initiate()
-playingAnimation = false
+PlayingAnimation = false
 TargetBlip = nil
 function debugPrint(msg)
     if Config.Debug == true then
@@ -73,7 +73,7 @@ local function prompt()
     end)
 end
 function playAnim(entity, dict, name, flag, time)
-    playingAnimation = true
+    PlayingAnimation = true
     RequestAnimDict(dict)
     local waitSkip = 0
     while not HasAnimDictLoaded(dict) do
@@ -89,7 +89,7 @@ function playAnim(entity, dict, name, flag, time)
 
     TaskPlayAnim(entity, dict, name, 1.0, 1.0, time, flag, 0, true, 0, false, 0, false)
     Wait(time)
-    playingAnimation = false
+    PlayingAnimation = false
 end
 
 function equipProp(model, bone, coords)
