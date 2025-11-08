@@ -6,15 +6,19 @@ from PyQt6.QtWidgets import QApplication
 from database_manager import Database
 from ui.auth_dialogs import LoginDialog
 from ui.main_window import QuestEditor
+from ui.stylesheet import STYLESHEET # <-- NOVÝ IMPORT
 
 def main():
     """Hlavní funkce aplikace."""
     app = QApplication(sys.argv)
     
+    # --- NOVÝ ŘÁDEK: Aplikace stylesheetu ---
+    app.setStyleSheet(STYLESHEET)
+    
     # 1. Vytvoříme a otestujeme připojení k databázi
     db_handler = Database()
     if not db_handler.connect():
-        return 1 # Ukončení s chybovým kódem
+        return 1
     
     # 2. Zobrazíme přihlašovací dialog
     login_dialog = LoginDialog(db_handler.connection)
@@ -26,7 +30,6 @@ def main():
         editor.show()
         return app.exec()
     else:
-        # Pokud uživatel zavře přihlašovací dialog, aplikace se tiše ukončí
         return 0
 
 if __name__ == '__main__':

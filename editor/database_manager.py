@@ -5,7 +5,7 @@ import config
 from PyQt6.QtWidgets import QMessageBox
 
 class Database:
-    """Spravuje veškeré připojení a dotazy do databáze."""
+    # ... metody connect, get_available_items, atd. zůstávají stejné ...
     def __init__(self):
         self.config = config.DB_CONFIG
         self.connection = None
@@ -58,29 +58,28 @@ class Database:
             QMessageBox.critical(None, "Chyba DB", f"Nepodařilo se smazat quest:\n{e}")
             return False
 
-    def save_quest(self, data):
-        try:
-            with self.connection.cursor() as cursor:
-                cursor.execute("SELECT id FROM aprts_simplequests_quests WHERE id = %s", (data['id'],))
-                is_update = bool(cursor.fetchone())
-        except pymysql.Error as e:
-            return False, f"Chyba při kontrole existence questu: {e}"
-
-        if is_update:
-            # Sestavení pro UPDATE, vynechá ID z SET klauzule
-            set_clause = ", ".join([f"`{k}`=%s" for k in data if k != 'id'])
+    def save_quest(self, data, quest_id=None):
+        """
+        Uloží data questu. Pokud je poskytnuto 'quest_id', provede UPDATE.
+        Jinak provede INSERT.
+        """
+        # Pokud se jedná o UPDATE, quest_id nebude None
+        if quest_id:
+            set_clause = ", ".join([f"`{k}`=%s" for k in data])
             sql = f"UPDATE aprts_simplequests_quests SET {set_clause} WHERE id=%s"
-            # Parametry: všechny hodnoty kromě ID, na konec přidáme ID pro WHERE
-            params = [v for k, v in data.items() if k != 'id'] + [data['id']]
+            params = list(data.values()) + [quest_id]
+            message = "Quest úspěšně aktualizován."
+        # Pokud je quest_id None, jedná se o nový quest (INSERT)
         else:
             columns = ", ".join(f"`{k}`" for k in data.keys())
             placeholders = ", ".join(["%s"] * len(data))
             sql = f"INSERT INTO aprts_simplequests_quests ({columns}) VALUES ({placeholders})"
             params = list(data.values())
+            message = "Nový quest úspěšně vytvořen."
 
         try:
             with self.connection.cursor() as cursor:
                 cursor.execute(sql, params)
-            return True, "Quest úspěšně uložen."
+            return True, message
         except pymysql.Error as e:
             return False, f"Chyba při ukládání questu:\n{e}"
