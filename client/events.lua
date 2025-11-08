@@ -2,70 +2,91 @@ AddEventHandler("onClientResourceStart", function(resourceName)
     if GetCurrentResourceName() ~= resourceName then
         return
     end
-    TriggerServerEvent("aprts_consumable:Server:getItems")
-    TriggerServerEvent("aprts_consumable:Server:getEffects")
+    TriggerServerEvent("aprts_simplequests:server:requestQuests")
+
+end)
+
+RegisterNetEvent("aprts_simplequests:client:recieveQuests")
+AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
+    debugPrint("Received quests from server")
+    for _, quest in pairs(quests) do
+        debugPrint("Loading quest: " .. quest.name)
+        Config.Quests[quest.id] = quest
+    end
+    for _, quest in pairs(Config.Quests) do
+        if quest.start.activation == "clientEvent" and quest.active then
+            debugPrint("Registering client event for quest start: " .. quest.start.param)
+            AddEventHandler(quest.start.param, function()
+                ActiveQuestID = quest.id
+                startQuest(quest.id)
+
+            end)
+        end
+        if quest.target.activation == "clientEvent" and quest.active then
+            debugPrint("Registering client event for quest target: " .. quest.target.param)
+            AddEventHandler(quest.target.param, function()
+                if ActiveQuestID ~= quest.id then
+                    notify("Tento úkol jsi ještě nezačal!")
+                    return
+                end
+                finishQuest(quest.id)
+            end)
+        end
+    end
 end)
 
 AddEventHandler("onResourceStop", function(resourceName)
     if GetCurrentResourceName() ~= resourceName then
         return
     end
-    blowSmoke()
-    if DoesEntityExist(smokeProp) then
-        debugPrint("Deleting smoke prop")
-        DeleteEntity(smokeProp)
-    end
-    if DoesEntityExist(foodEntity) then
-        debugPrint("Deleting foodEntity")
-        DeleteEntity(foodEntity)
-    end
-end)
-
-RegisterNetEvent("aprts_consumable:Client:LoadItems")
-AddEventHandler("aprts_consumable:Client:LoadItems", function(data)
-    items = data
-    print("Items loaded")
-    
-end)
-
-RegisterNetEvent("aprts_consumable:Client:LoadEffects")
-AddEventHandler("aprts_consumable:Client:LoadEffects", function(data)
-    effects = data
-    print("Effects loaded")
-
-end)
-
-RegisterNetEvent("aprts_consumable:Client:UseItem")
-AddEventHandler("aprts_consumable:Client:UseItem", function(item)
-    debugPrint(item.water .. ", " .. item.food .. ", " .. item.health)
-    if item.type == "cigar" or item.type == "cigarette" or item.type == "pipe" or item.type == "opiumPipe" or item.type ==
-        "longPipe" then
-        useSmoke(item)
-        return
-    end
-    local playerPed = PlayerPedId()
-
-    if item.capacity > 1 then
-        startEat(item)
-    else
-
-        startEat(item)
-
-        if item.return_item ~= nil and item.return_item ~= "" then
-            debugPrint("Item used returning " .. item.return_item)
-            TriggerServerEvent("aprts_consumable:Server:returnItem", item.return_item)
+    for _, quest in pairs(Config.Quests) do
+        if DoesEntityExist(quest.start.obj) then
+            DeleteEntity(quest.start.obj)
+            quest.start.obj = nil
+        end
+        if DoesEntityExist(quest.target.obj) then
+            DeleteEntity(quest.target.obj)
+            quest.target.obj = nil
         end
     end
+    if TargetBlip then
+        RemoveBlip(TargetBlip)
+        TargetBlip = nil
+    end
 end)
 
-RegisterNetEvent("aprts_consumable:Client:setEffect")
-AddEventHandler("aprts_consumable:Client:setEffect", function(effect_id, duration)
-    if effect_id == 0 or effect_id == nil then
+RegisterNetEvent("aprts_simplequests:client:finishActiveQuest")
+AddEventHandler("aprts_simplequests:client:finishActiveQuest", function()
+    local quest = Config.Quests[ActiveQuestID]
+    if not quest then
         return
     end
-    if duration == 0 or duration == nil then
+    print(json.encode(quest, {
+        indent = true
+    }))
+    if quest.active == false then
+        notify("Tento úkol není aktivní.")
         return
     end
-    setEffect(effect_id, duration)
-   
+    finishQuest(ActiveQuestID)
+end)
+
+RegisterNetEvent("aprts_simplequests:client:onQuestStartUseItem")
+AddEventHandler("aprts_simplequests:client:onQuestStartUseItem", function(questId)
+    local quest = Config.Quests[questId]
+    if quest.active == false then
+        print("Tento úkol není aktivní.")
+        return
+    end
+    startQuest(questId)
+end)
+
+RegisterNetEvent("aprts_simplequests:client:onQuestTargetUseItem")
+AddEventHandler("aprts_simplequests:client:onQuestTargetUseItem", function(questId)
+    local quest = Config.Quests[questId]
+    if ActiveQuestID ~= questId then
+        print("Tento úkol jsi ještě nezačal!")
+        return
+    end
+    finishQuest(questId)
 end)

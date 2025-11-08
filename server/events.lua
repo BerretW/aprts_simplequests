@@ -1,84 +1,106 @@
 AddEventHandler("onResourceStart", function(resource)
     if resource == GetCurrentResourceName() then
-        MySQL:execute("SELECT * FROM aprts_consumable", {}, function(result)
-            for _, v in pairs(result) do
-                v.animation = json.decode(v.animation)
-                items[v.id] = v
-                exports.vorp_inventory:registerUsableItem(v.item, function(data)
-                    local _source = data.source
-                    exports.vorp_inventory:closeInventory(_source)
-
-                    local item = exports.vorp_inventory:getItem(_source, v.item, nil, data.item.metadata)
-                    if not item then
-                        return
-                    end -- Pokud item neexistuje, nic nedělat
-
-                    local itemId = item.id
-                    local meta = item.metadata or {}
-
-                    -- Nastav kapacitu pokud není
-                    if not meta.capacity then
-                        meta.capacity = v.capacity
-                    end
-
-                    meta.capacity = meta.capacity - 1
-                    meta.description = "Zbývá " .. meta.capacity
-
-                    if meta.capacity <= 0 then
-                        meta.capacity = meta.capacity + 1
-                        meta.description = "Zbývá " .. meta.capacity
-                        -- odeber spotřebovaný item
-                        if exports.vorp_inventory:subItem(_source, v.item, 1, meta) == true then
-                            -- pokud je return_item, vrať ho hráči
-                            if v.return_item and v.return_item ~= "" then
-                                exports.vorp_inventory:addItem(_source, v.return_item, 1)
-                            end
-                        else
-                            exports.vorp_inventory:subItem(_source, v.item, 1)
-                            if v.return_item and v.return_item ~= "" then
-                                exports.vorp_inventory:addItem(_source, v.return_item, 1)
-                            end
-                        end
-                    else
-                        -- nastav nová metadata
-                        exports.vorp_inventory:setItemMetadata(_source, itemId, meta)
-                    end
-
-                    TriggerClientEvent("aprts_consumable:Client:UseItem", _source, v)
-                    local nutriData = {
-                        protein = v.protein,
-                        carbs = v.carbs,
-                        fats = v.fat,
-                        vitamins = v.vitamins,
-                    }
-                    TriggerClientEvent("aprts_nutrition:consumeItem", _source, nutriData)
-                end)
-            end
-        end)
-
-        MySQL:execute("SELECT * FROM aprts_consumable_effects", {}, function(result)
-            for _, v in pairs(result) do
-                v.effects = json.decode(v.effects)
-                effects[v.id] = v
-            end
-        end)
+        LoadQuests()
+        LoadCharacterData()
     end
 end)
 
-RegisterServerEvent("aprts_consumable:Server:getItems")
-AddEventHandler("aprts_consumable:Server:getItems", function()
-    local src = source
-    while not next(items) do
-        Wait(100)
+RegisterServerEvent("aprts_simplequests:server:requestQuests")
+AddEventHandler("aprts_simplequests:server:requestQuests", function()
+    local _source = source
+    local player = Player(_source)
+    if player == nil then
+        return
     end
-    TriggerClientEvent("aprts_consumable:Client:LoadItems", src, items)
+    local CharID = player.state.Character.CharId
+
+    debugPrint("aprts_simplequests:server:requestQuests called by player " .. _source)
+    while not QuestsLoaded or not CharacterDataLoaded do
+        Citizen.Wait(100)
+    end
+    local playerQuests = json.decode(json.encode(Config.Quests))
+
+    -- Deaktivujeme splněné questy pro tohoto hráče
+    for _, questID in ipairs(charQuests[CharID] or {}) do
+        if playerQuests[questID] then
+            playerQuests[questID].active = false
+        end
+    end
+    TriggerClientEvent("aprts_simplequests:client:recieveQuests", _source, playerQuests)
 end)
 
-RegisterServerEvent("aprts_consumable:Server:getEffects")
-AddEventHandler("aprts_consumable:Server:getEffects", function()
-    local src = source
-    while not next(effects) do
-        Wait(100)
+
+
+
+RegisterServerEvent("vorp_inventory:useItem")
+AddEventHandler("vorp_inventory:useItem", function(data)
+    local _source = source
+    local itemName = data.item
+    print("Item used: " .. itemName)
+    exports.vorp_inventory:getItemByMainId(_source, data.id, function(data)
+        if data == nil then
+            return
+        end
+        for _, quest in pairs(Config.Quests) do
+            if quest.start.activation == "useItem" and quest.start.param == itemName then
+                print("Triggering useItem for quest start")
+                TriggerClientEvent("aprts_simplequests:client:onQuestStartUseItem", _source, quest.id)
+            end
+            if quest.target.activation == "useItem" and quest.target.param == itemName then
+                print("Triggering useItem for quest target")
+                TriggerClientEvent("aprts_simplequests:client:onQuestTargetUseItem", _source, quest.id)
+            end
+        end
+    end)
+end)
+
+RegisterServerEvent("aprts_simplequests:server:finishQuest")
+AddEventHandler("aprts_simplequests:server:finishQuest", function(questID)
+    local _source = source
+    local player = Player(_source)
+    if player == nil then
+        return
     end
-    TriggerClientEvent("aprts_consumable:Client:LoadEffects", src, effects)
+    local quest = Config.Quests[questID]
+    local charID = Player(_source).state.Character.CharId
+
+    if not charQuests[charID] then
+        charQuests[charID] = {}
+    end
+    table.insert(charQuests[charID], questID)
+    debugPrint("Player " .. _source .. " completed quest " .. questID)
+    if quest.repeatable == false then
+        -- Mark quest as inactive for this player
+        debugPrint("Marking quest " .. questID .. " as completed for charID " .. charID)
+        MySQL:execute("INSERT INTO aprts_simplequests_char (charid, questid) VALUES (@charid, @questid)", {
+            ['@charid'] = charID,
+            ['@questid'] = questID
+        })
+    end
+    
+
+end)
+
+
+RegisterServerEvent("aprts_simplequests:server:giveItems")
+AddEventHandler("aprts_simplequests:server:giveItems", function(items)
+    local _source = source
+    for _, item in pairs(items) do
+        -- TriggerEvent('inventory:addItem', _source, item.name, item.count)
+        exports.vorp_inventory:addItem(_source, item.name, item.count, item.meta or {})
+        notify(_source, "Giving item: " .. item.name .. " x" .. item.count)
+    end
+end)
+
+RegisterServerEvent("aprts_simplequests:server:giveMoney")
+AddEventHandler("aprts_simplequests:server:giveMoney", function(amount)
+    local _source = source
+    local user = Core.getUser(_source)
+    if not user then
+        return
+    end
+    local character = user.getUsedCharacter
+    if amount and amount > 0 then
+        character.addCurrency(0, amount)
+    end
 end)
