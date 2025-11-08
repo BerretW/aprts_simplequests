@@ -9,11 +9,8 @@
 **Než začnete, ujistěte se, že máte na serveru nainstalované a spuštěné následující scripty, protože** **aprts_simplequests** **na nich závisí:**
 
 * **@oxmysql**: Pro komunikaci s databází.
-* **@ox_lib**: Základní knihovna pro notifikace, progressbary atd.
-* **@jo_libs**: Další sdílená knihovna.
 * **vorp_core**: Základní framework serveru.
 * **vorp_inventory**: Pro práci s inventářem (dávání odměn).
-* **feather-progressbar** **(nebo jiný export pro progressbar, který** **aprts_simplequests** **volá).**
 * **notifications** **(nebo jiný script, který handle'uje event** **notifications:notify**).
 
 **Postup:**
