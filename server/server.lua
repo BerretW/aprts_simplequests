@@ -158,58 +158,7 @@ function LOG(player, event, message, ...)
     lib.logger(player, event, text, ...)
 
 end
-QuestsLoaded = false
--- function LoadQuests()
---     MySQL:execute("SELECT * FROM aprts_simplequests_quests WHERE active = 1", {}, function(result)
---         Config.Quests = {}
---         if result then
---             for _, quest in pairs(result) do
---                 local newQuest = {
---                     id = quest.id,
---                     active = quest.active,
---                     name = quest.name,
---                     description = quest.description,
---                     jobs = json.decode(quest.jobs),
---                     repeatable = quest.repeatable,
 
---                     start = {
---                         activation = quest.start_activation,
---                         param = quest.start_param,
---                         NPC = quest.start_npc,
---                         coords = vec4FromString(quest.start_coords),
---                         text = quest.start_text,
---                         prompt = json.decode(quest.start_prompt),
---                         items = json.decode(quest.start_items),
---                         events = json.decode(quest.start_events),
---                     },
---                     target = {
---                         activation = quest.target_activation,
---                         param = quest.target_param,
---                         NPC = quest.target_npc,
---                         blip = quest.target_blip,
---                         coords = vec4FromString(quest.target_coords),
---                         text = quest.target_text,
---                         prompt = json.decode(quest.target_prompt),
---                         items = json.decode(quest.target_items),
---                         money = quest.target_money,
---                         events = json.decode(quest.target_events), 
---                     }
---                 }
---                 Config.Quests[quest.id] = newQuest
---             end
---         end
---         print("Questy:", json.encode(Config.Quests, {
---             indent = true
---         }))
---         QuestsLoaded = true
---     end)
--- end
-
-
-
--- =================================================================
--- VYLEPŠENÁ FUNKCE LoadQuests PRO server/server.lua
--- =================================================================
 QuestsLoaded = false
 function LoadQuests()
     MySQL:execute("SELECT * FROM aprts_simplequests_quests WHERE active = 1", {}, function(result)
