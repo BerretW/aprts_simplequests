@@ -1,106 +1,92 @@
-AddEventHandler("onResourceStart", function(resource)
-    if resource == GetCurrentResourceName() then
-        LoadQuests()
-        LoadCharacterData()
-    end
-end)
-
-RegisterServerEvent("aprts_simplequests:server:requestQuests")
-AddEventHandler("aprts_simplequests:server:requestQuests", function()
-    local _source = source
-    local player = Player(_source)
-    if player == nil then
+AddEventHandler("onClientResourceStart", function(resourceName)
+    if GetCurrentResourceName() ~= resourceName then
         return
     end
-    local CharID = player.state.Character.CharId
+    TriggerServerEvent("aprts_simplequests:server:requestQuests")
 
-    debugPrint("aprts_simplequests:server:requestQuests called by player " .. _source)
-    while not QuestsLoaded or not CharacterDataLoaded do
-        Citizen.Wait(100)
-    end
-    local playerQuests = json.decode(json.encode(Config.Quests))
-
-    -- Deaktivujeme splněné questy pro tohoto hráče
-    for _, questID in ipairs(charQuests[CharID] or {}) do
-        if playerQuests[questID] then
-            playerQuests[questID].active = false
-        end
-    end
-    TriggerClientEvent("aprts_simplequests:client:recieveQuests", _source, playerQuests)
 end)
 
+RegisterNetEvent("aprts_simplequests:client:recieveQuests")
+AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
+    debugPrint("Received quests from server")
+    for _, quest in pairs(quests) do
+        debugPrint("Loading quest: " .. quest.name)
+        Config.Quests[quest.id] = quest
+    end
+    for _, quest in pairs(Config.Quests) do
+        if quest.start.activation == "clientEvent" and quest.active then
+            debugPrint("Registering client event for quest start: " .. quest.start.param)
+            AddEventHandler(quest.start.param, function()
+                ActiveQuestID = quest.id
+                startQuest(quest.id)
 
-
-
-RegisterServerEvent("vorp_inventory:useItem")
-AddEventHandler("vorp_inventory:useItem", function(data)
-    local _source = source
-    local itemName = data.item
-    print("Item used: " .. itemName)
-    exports.vorp_inventory:getItemByMainId(_source, data.id, function(data)
-        if data == nil then
-            return
+            end)
         end
-        for _, quest in pairs(Config.Quests) do
-            if quest.start.activation == "useItem" and quest.start.param == itemName then
-                print("Triggering useItem for quest start")
-                TriggerClientEvent("aprts_simplequests:client:onQuestStartUseItem", _source, quest.id)
-            end
-            if quest.target.activation == "useItem" and quest.target.param == itemName then
-                print("Triggering useItem for quest target")
-                TriggerClientEvent("aprts_simplequests:client:onQuestTargetUseItem", _source, quest.id)
-            end
+        if quest.target.activation == "clientEvent" and quest.active then
+            debugPrint("Registering client event for quest target: " .. quest.target.param)
+            AddEventHandler(quest.target.param, function()
+                if ActiveQuestID ~= quest.id then
+                    notify("Tento úkol jsi ještě nezačal!")
+                    return
+                end
+                finishQuest(quest.id)
+            end)
         end
-    end)
+    end
 end)
 
-RegisterServerEvent("aprts_simplequests:server:finishQuest")
-AddEventHandler("aprts_simplequests:server:finishQuest", function(questID)
-    local _source = source
-    local player = Player(_source)
-    if player == nil then
+AddEventHandler("onResourceStop", function(resourceName)
+    if GetCurrentResourceName() ~= resourceName then
         return
     end
-    local quest = Config.Quests[questID]
-    local charID = Player(_source).state.Character.CharId
-
-    if not charQuests[charID] then
-        charQuests[charID] = {}
+    for _, quest in pairs(Config.Quests) do
+        if DoesEntityExist(quest.start.obj) then
+            DeleteEntity(quest.start.obj)
+            quest.start.obj = nil
+        end
+        if DoesEntityExist(quest.target.obj) then
+            DeleteEntity(quest.target.obj)
+            quest.target.obj = nil
+        end
     end
-    table.insert(charQuests[charID], questID)
-    debugPrint("Player " .. _source .. " completed quest " .. questID)
-    if quest.repeatable == false then
-        -- Mark quest as inactive for this player
-        debugPrint("Marking quest " .. questID .. " as completed for charID " .. charID)
-        MySQL:execute("INSERT INTO aprts_simplequests_char (charid, questid) VALUES (@charid, @questid)", {
-            ['@charid'] = charID,
-            ['@questid'] = questID
-        })
-    end
-    
-
-end)
-
-
-RegisterServerEvent("aprts_simplequests:server:giveItems")
-AddEventHandler("aprts_simplequests:server:giveItems", function(items)
-    local _source = source
-    for _, item in pairs(items) do
-        -- TriggerEvent('inventory:addItem', _source, item.name, item.count)
-        exports.vorp_inventory:addItem(_source, item.name, item.count, item.meta or {})
-        notify(_source, "Giving item: " .. item.name .. " x" .. item.count)
+    if TargetBlip then
+        RemoveBlip(TargetBlip)
+        TargetBlip = nil
     end
 end)
 
-RegisterServerEvent("aprts_simplequests:server:giveMoney")
-AddEventHandler("aprts_simplequests:server:giveMoney", function(amount)
-    local _source = source
-    local user = Core.getUser(_source)
-    if not user then
+RegisterNetEvent("aprts_simplequests:client:finishActiveQuest")
+AddEventHandler("aprts_simplequests:client:finishActiveQuest", function()
+    local quest = Config.Quests[ActiveQuestID]
+    if not quest then
         return
     end
-    local character = user.getUsedCharacter
-    if amount and amount > 0 then
-        character.addCurrency(0, amount)
+    print(json.encode(quest, {
+        indent = true
+    }))
+    if quest.active == false then
+        notify("Tento úkol není aktivní.")
+        return
     end
+    finishQuest(ActiveQuestID)
+end)
+
+RegisterNetEvent("aprts_simplequests:client:onQuestStartUseItem")
+AddEventHandler("aprts_simplequests:client:onQuestStartUseItem", function(questId)
+    local quest = Config.Quests[questId]
+    if quest.active == false then
+        print("Tento úkol není aktivní.")
+        return
+    end
+    startQuest(questId)
+end)
+
+RegisterNetEvent("aprts_simplequests:client:onQuestTargetUseItem")
+AddEventHandler("aprts_simplequests:client:onQuestTargetUseItem", function(questId)
+    local quest = Config.Quests[questId]
+    if ActiveQuestID ~= questId then
+        print("Tento úkol jsi ještě nezačal!")
+        return
+    end
+    finishQuest(questId)
 end)
