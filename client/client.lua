@@ -227,6 +227,7 @@ function finishQuest(questID)
         RemoveBlip(TargetBlip)
         TargetBlip = nil
     end
+    TriggerServerEvent("aprts_simplequests:server:finishQuest", questID)
 end
 
 function startQuest(questID)

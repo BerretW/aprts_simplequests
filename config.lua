@@ -1,5 +1,5 @@
 Config = {}
-Config.Debug = false
+Config.Debug = true
 Config.DST = 2
 Config.GreenTimeStart = 16
 Config.GreenTimeEnd = 23
@@ -11,8 +11,8 @@ Config.WebHook = ""
 Config.ServerName = 'WestHaven ** Loger'
 Config.DiscordColor = 16753920
 
-
-Config.Quests = {
+Config.Quests = {}
+Config.QuestData = {
    [1]= {
         id = 1,
         active = true,

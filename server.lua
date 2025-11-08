@@ -1,5 +1,39 @@
+-- CREATE TABLE IF NOT EXISTS `aprts_simplequests_char` (
+--   `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+--   `charId` mediumint(8) unsigned NOT NULL,
+--   `questID` smallint(5) unsigned NOT NULL,
+--   UNIQUE KEY `Index 1` (`id`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+-- CREATE TABLE IF NOT EXISTS `aprts_simplequests_quests` (
+--   `id` int(11) NOT NULL,
+--   `active` tinyint(1) NOT NULL DEFAULT 1,
+--   `name` varchar(100) NOT NULL,
+--   `description` varchar(255) DEFAULT NULL,
+--   `jobs` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`jobs`)),
+--   `repeatable` tinyint(1) NOT NULL DEFAULT 0,
+--   `start_activation` enum('talktoNPC','distance','useItem','clientEvent') DEFAULT NULL,
+--   `start_param` varchar(100) DEFAULT NULL,
+--   `start_npc` varchar(50) DEFAULT NULL,
+--   `start_coords` varchar(100) DEFAULT NULL,
+--   `start_text` varchar(255) DEFAULT NULL,
+--   `start_prompt` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`start_prompt`)),
+--   `start_items` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`start_items`)),
+--   `start_events` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`start_events`)),
+--   `target_activation` enum('talktoNPC','distance','useItem','clientEvent') DEFAULT NULL,
+--   `target_param` varchar(100) DEFAULT NULL,
+--   `target_npc` varchar(50) DEFAULT NULL,
+--   `target_blip` varchar(50) DEFAULT NULL,
+--   `target_coords` varchar(100) DEFAULT NULL,
+--   `target_text` varchar(255) DEFAULT NULL,
+--   `target_prompt` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`target_prompt`)),
+--   `target_items` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`target_items`)),
+--   `target_money` int(11) NOT NULL DEFAULT 0,
+--   `target_events` longtext CHARACTER SET utf8mb4 COLLATE utf8mb4_bin DEFAULT NULL CHECK (json_valid(`target_events`)),
+--   PRIMARY KEY (`id`)
+-- ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 MySQL = exports.oxmysql
 Core = exports.vorp_core:GetCore()
+charQuests = {}
 
 
 function debugPrint(msg)
@@ -19,9 +53,7 @@ function table.count(tbl)
     return count
 end
 
-
-
-function hasJob(player,jobtable)
+function hasJob(player, jobtable)
     local pjob = Player(player).state.Character.Job
     local pGrade = Player(player).state.Character.Grade
     local pLabel = Player(player).state.Character.Label
@@ -32,7 +64,6 @@ function hasJob(player,jobtable)
     end
     return false
 end
-
 
 function round(num)
     return math.floor(num * 100 + 0.5) / 100
@@ -66,6 +97,23 @@ function unixToDateTime(unixTime)
     return os.date('%Y-%m-%d %H:%M:%S', unixTime)
 end
 
+function vec4FromString(coordString)
+
+    if not coordString or coordString == '' then
+        return nil
+    end
+    local coords = {}
+    for val in string.gmatch(coordString, "[^,]+") do
+        table.insert(coords, tonumber(val))
+    end
+    if #coords == 4 then
+        return vector4(coords[1], coords[2], coords[3], coords[4])
+    elseif #coords == 3 then
+        return vector3(coords[1], coords[2], coords[3])
+    end
+    return nil
+
+end
 
 function DiscordWeb(name, message, footer)
     if Config.WebHook == "" then
@@ -109,4 +157,68 @@ function LOG(player, event, message, ...)
     DiscordWeb(event .. ", " .. playerName, message, os.date("Datum: %d.%m.%Y Čas: %H:%M:%S"))
     lib.logger(player, event, text, ...)
 
+end
+QuestsLoaded = false
+function LoadQuests()
+    MySQL:execute("SELECT * FROM aprts_simplequests_quests WHERE active = 1", {}, function(result)
+        Config.Quests = {}
+        if result then
+            for _, quest in pairs(result) do
+                local newQuest = {
+                    id = quest.id,
+                    active = quest.active,
+                    name = quest.name,
+                    description = quest.description,
+                    jobs = json.decode(quest.jobs),
+                    repeatable = quest.repeatable,
+
+                    start = {
+                        activation = quest.start_activation,
+                        param = quest.start_param,
+                        NPC = quest.start_npc,
+                        coords = vec4FromString(quest.start_coords),
+                        text = quest.start_text,
+                        prompt = json.decode(quest.start_prompt),
+                        items = json.decode(quest.start_items),
+                        events = json.decode(quest.start_events),
+                    },
+                    target = {
+                        activation = quest.target_activation,
+                        param = quest.target_param,
+                        NPC = quest.target_npc,
+                        blip = quest.target_blip,
+                        coords = vec4FromString(quest.target_coords),
+                        text = quest.target_text,
+                        prompt = json.decode(quest.target_prompt),
+                        items = json.decode(quest.target_items),
+                        money = quest.target_money,
+                        events = json.decode(quest.target_events), 
+                    }
+                }
+                Config.Quests[quest.id] = newQuest
+            end
+        end
+        print("Questy:", json.encode(Config.Quests, {
+            indent = true
+        }))
+        QuestsLoaded = true
+    end)
+end
+
+CharacterDataLoaded = false
+function LoadCharacterData()
+    MySQL:execute("SELECT * FROM aprts_simplequests_char", {}, function(result)
+        charQuests = {}
+        if result then
+            for _, row in pairs(result) do
+                local charID = row.charId
+                local questID = row.questID
+                if not charQuests[charID] then
+                    charQuests[charID] = {}
+                end
+                table.insert(charQuests[charID], questID)
+            end
+        end
+        CharacterDataLoaded = true
+    end)
 end

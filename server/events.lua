@@ -1,3 +1,34 @@
+AddEventHandler("onResourceStart", function(resource)
+    if resource == GetCurrentResourceName() then
+        LoadQuests()
+        LoadCharacterData()
+    end
+end)
+
+RegisterServerEvent("aprts_simplequests:server:requestQuests")
+AddEventHandler("aprts_simplequests:server:requestQuests", function()
+    local _source = source
+    local player = Player(_source)
+    if player == nil then
+        return
+    end
+    local CharID = player.state.Character.CharId
+
+    debugPrint("aprts_simplequests:server:requestQuests called by player " .. _source)
+    while not QuestsLoaded do
+        Citizen.Wait(100)
+    end
+
+    while not CharacterDataLoaded do
+        Citizen.Wait(100)
+    end
+    for _, questID in pairs(charQuests[CharID] or {}) do
+        if Config.Quests[questID] then
+            Config.Quests[questID].active = false
+        end
+    end
+    TriggerClientEvent("aprts_simplequests:client:recieveQuests", _source, Config.Quests)
+end)
 
 RegisterServerEvent("vorp_inventory:useItem")
 AddEventHandler("vorp_inventory:useItem", function(data)
@@ -21,6 +52,34 @@ AddEventHandler("vorp_inventory:useItem", function(data)
     end)
 end)
 
+RegisterServerEvent("aprts_simplequests:server:finishQuest")
+AddEventHandler("aprts_simplequests:server:finishQuest", function(questID)
+    local _source = source
+    local player = Player(_source)
+    if player == nil then
+        return
+    end
+    local quest = Config.Quests[questID]
+    local charID = Player(_source).state.Character.CharId
+
+    if not charQuests[charID] then
+        charQuests[charID] = {}
+    end
+    table.insert(charQuests[charID], questID)
+    debugPrint("Player " .. _source .. " completed quest " .. questID)
+    if quest.repeatable == false then
+        -- Mark quest as inactive for this player
+        debugPrint("Marking quest " .. questID .. " as completed for charID " .. charID)
+        MySQL:execute("INSERT INTO aprts_simplequests_char (charid, questid) VALUES (@charid, @questid)", {
+            ['@charid'] = charID,
+            ['@questid'] = questID
+        })
+    end
+    
+
+end)
+
+
 RegisterServerEvent("aprts_simplequests:server:giveItems")
 AddEventHandler("aprts_simplequests:server:giveItems", function(items)
     local _source = source
@@ -39,7 +98,7 @@ AddEventHandler("aprts_simplequests:server:giveMoney", function(amount)
         return
     end
     local character = user.getUsedCharacter
-    if amount > 0 then
+    if amount and amount > 0 then
         character.addCurrency(0, amount)
     end
 end)

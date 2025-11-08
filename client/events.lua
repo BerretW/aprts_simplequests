@@ -2,8 +2,20 @@ AddEventHandler("onClientResourceStart", function(resourceName)
     if GetCurrentResourceName() ~= resourceName then
         return
     end
+    TriggerServerEvent("aprts_simplequests:server:requestQuests")
+
+end)
+
+RegisterNetEvent("aprts_simplequests:client:recieveQuests")
+AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
+    debugPrint("Received quests from server")
+    for _, quest in pairs(quests) do
+        debugPrint("Loading quest: " .. quest.name)
+        Config.Quests[quest.id] = quest
+    end
     for _, quest in pairs(Config.Quests) do
         if quest.start.activation == "clientEvent" and quest.active then
+            debugPrint("Registering client event for quest start: " .. quest.start.param)
             AddEventHandler(quest.start.param, function()
                 ActiveQuestID = quest.id
                 startQuest(quest.id)
@@ -11,13 +23,13 @@ AddEventHandler("onClientResourceStart", function(resourceName)
             end)
         end
         if quest.target.activation == "clientEvent" and quest.active then
+            debugPrint("Registering client event for quest target: " .. quest.target.param)
             AddEventHandler(quest.target.param, function()
                 if ActiveQuestID ~= quest.id then
                     notify("Tento úkol jsi ještě nezačal!")
                     return
                 end
                 finishQuest(quest.id)
-
             end)
         end
     end
@@ -37,7 +49,7 @@ AddEventHandler("onResourceStop", function(resourceName)
             quest.target.obj = nil
         end
     end
-        if TargetBlip then
+    if TargetBlip then
         RemoveBlip(TargetBlip)
         TargetBlip = nil
     end
@@ -49,7 +61,9 @@ AddEventHandler("aprts_simplequests:client:finishActiveQuest", function()
     if not quest then
         return
     end
-    print(json.encode(quest, {indent=true}))
+    print(json.encode(quest, {
+        indent = true
+    }))
     if quest.active == false then
         notify("Tento úkol není aktivní.")
         return
