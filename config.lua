@@ -36,10 +36,10 @@ Config.Quests = {
             },
             events = {
                 server = {
-                    {name = "aprts_simplequests:server:completeDeliveryQuest", args = {} }
+                    {name = "aprts_simplequests:server:startDeliveryQuest", args = {} }
                 },
                 client = {
-                    {name = "aprts_simplequests:client:onDeliveryQuestComplete", args = {} }
+                    {name = "aprts_simplequests:client:startDeliveryQuest", args = {} }
                 }
             }
         },
@@ -68,56 +68,54 @@ Config.Quests = {
             }
         },
     },
+    
     [2]= {
-
         id = 2,
         active = true,
-        name = "Žrací úkol",
-        description = "Dal sis gulášek? Tak ted si dej další!",
+        name = "Nášup u Karla", -- ZMĚNA: výstižnější název
+        description = "Snědl jsi výborný guláš. Zajdi za Karlem a poděkuj mu.", -- ZMĚNA: nový popis
         jobs = nil,
         repeatable = false,
         start = {
-            activation = "useItem", -- talktoNPC, distance(distance), useItem(itemname), clientEvent(eventname)
+            activation = "useItem", -- Start se aktivuje použitím itemu, to zůstává
             param = "food_muschgulas",
             NPC = nil,
             coords = nil,
 
-            text = "AAAA tak ty si tu vyžíráš gulášek? Tady máš další!",
+            text = "Mmm, to byl ale guláš! Měl bych zajít za Karlem a říct mu, jak mi chutnalo.", -- ZMĚNA: Text, který hráče navede
             prompt = nil,
-            items = {
-                {name = "food_muschgulas", count = 1}
-            },
+            items = {}, -- ZMĚNA: Při startu už hráč nedostane žádný item, odměna je až na konci
             events = {
-                server = {
-                    -- {name = "aprts_simplequests:server:completeDeliveryQuest", args = {} }
-                },
-                client = {
-                    {name = "aprts_simplequests:client:finishActiveQuest", args = {} }
-                }
+                server = {},
+                client = {} 
+                -- ZMĚNA: Odebráno automatické dokončení úkolu! To byla hlavní chyba.
             }
         },
         target = {
-            activation = nil, -- talktoNPC,distance(distance), useItem(itemname), clientEvent(eventname)
-            param = nil,
-            NPC = nil,
-            coords = nil,
-            text = "Snad ti chutnal pane. Tady máš ještě jeden gulášek.",
+            activation = "talktoNPC", -- ZMĚNA: Cílem je teď promluvit s NPC
+            param = nil, -- param nepotřebujeme, když mluvíme s NPC
+            NPC = "s_m_m_valcowpoke_01", -- ZMĚNA: Model pro našeho kuchaře Karla (můžeš změnit)
+            blip = "blip_bag_capture", -- ZMĚNA: Přidán blip, aby hráč věděl, kam jít
+            coords = vector4(-222.500259, 663.965332, 113.324120, 107.736641), -- !! DŮLEŽITÉ: ZMĚŇ SOUŘADNICE, kam chceš Karla umístit !!
+
+            text = "Rád slyším, že ti chutnalo! Tady máš, přidej si. Čerstvá várka!", -- Text po dokončení
             prompt = {
-                text = "Přinést balíček sem.",
-                groupText = "Ukoly od Karla"
+                text = "Poděkovat za guláš", -- Text, který se ukáže u NPC
+                groupText = "Úkol od Karla"
             },
             items = {
-                {name = "food_muschgulas", count = 1,meta = {} }
+                {name = "food_muschgulas", count = 1, meta = {} } -- Odměna - další guláš
             },
-            money = 0,
-            events = {
+            money = 5, -- ZMĚNA: Přidána malá finanční odměna
+            events = { 
+                -- Zde můžeš nechat původní eventy, pokud chceš po dokončení něco specifického spustit
                 server = {
-                    {name = "aprts_simplequests:server:completeDeliveryQuest", args = {} }
+                    -- {name = "neco_na_serveru", args = {} }
                 },
                 client = {
-                    {name = "aprts_simplequests:client:onDeliveryQuestComplete", args = {} }
+                    -- {name = "neco_na_klientovi", args = {} }
                 }
             }
         },
-    }
+    },
 }
