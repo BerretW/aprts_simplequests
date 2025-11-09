@@ -18,7 +18,7 @@ class QuestEditor(QMainWindow):
         super().__init__()
         self.db = db_handler
         self.current_quest_id = None
-        self.setWindowTitle("RedM Quest Editor")
+        self.setWindowTitle("RedM Quest Editor V1.1")
         self.setGeometry(100, 100, 1200, 800)
         self.init_ui()
         self.load_quests()
