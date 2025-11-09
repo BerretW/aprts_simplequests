@@ -48,6 +48,10 @@ AddEventHandler("onResourceStop", function(resourceName)
             DeleteEntity(quest.target.obj)
             quest.target.obj = nil
         end
+        if quest.start.blipOBJ then
+            RemoveBlip(quest.start.blipOBJ)
+            quest.start.blipOBJ = nil
+        end
     end
     if TargetBlip then
         RemoveBlip(TargetBlip)

@@ -165,6 +165,9 @@ end
 
 function reqCheck(questID)
     local quest = Config.Quests[questID]
+    if not quest then
+        return true
+    end
     local charId = LocalPlayer.state.Character.id
     if not quest.complete_quests or table.count(quest.complete_quests) == 0 then
         return true

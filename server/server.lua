@@ -197,7 +197,7 @@ function LoadQuests()
                         activation = quest.start_activation,
                         param = quest.start_param,
                         NPC = quest.start_npc,
-                        blip = quest.start_blip or 0,
+                        blip = quest.start_blip or "blip_adversary_small",
                         animDict = quest.start_anim_dict or nil,
                         animName = quest.start_anim_name or nil,
                         coords = vec4FromString(quest.start_coords),

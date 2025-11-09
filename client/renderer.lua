@@ -50,7 +50,7 @@ Citizen.CreateThread(function()
                 else
                     if quest.start.coords and quest.start.NPC then
                         dist = #(playerPos - vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
-                        if dist < 30.0 then
+                        if dist < 30.0 and quest.id ~= ActiveQuestID then
                             if not DoesEntityExist(quest.start.obj) then
                                 quest.start.obj = spawnNPC(quest.start.NPC, quest.start.coords.x, quest.start.coords.y,
                                     quest.start.coords.z)

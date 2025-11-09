@@ -18,8 +18,24 @@ Citizen.CreateThread(function()
                 -- print(distance)
                 if distance < 20.0 then
                     drawMarkerBig(targetCoords.x, targetCoords.y, targetCoords.z)
-                    
+
                     pause = 0
+                end
+            end
+        else
+            for _, quest in pairs(Config.Quests) do
+                if quest.active and reqCheck(quest.id) then
+                    if quest.start.coords and quest.start.activation == "talktoNPC" then
+                        if not quest.start.blipOBJ then
+                            quest.start.blipOBJ = CreateBlip(quest.start.coords, quest.start.blip, quest.name)
+                            -- print(distance)
+                        end
+                    end
+                else
+                    if quest.start.blipOBJ then
+                        RemoveBlip(quest.start.blipOBJ)
+                        quest.start.blipOBJ = nil
+                    end
                 end
             end
         end
