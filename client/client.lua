@@ -196,8 +196,8 @@ function startQuest(questID)
     notify(quest.start.text)
     if quest.start.events and quest.start.events.client then
         for _, event in pairs(quest.start.events.client) do
-            print("Triggering event:", event.name)
-            print("With args:", event.args)
+            -- print("Triggering event:", event.name)
+            -- print("With args:", event.args)
             TriggerEvent(event.name, event.args[1], event.args[2], event.args[3], event.args[4], event.args[5])
         end
     end
