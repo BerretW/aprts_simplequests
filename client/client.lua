@@ -58,13 +58,14 @@ end
 
 function playAnim(entity, dict, name, flag, time, sound)
     if sound then
-        print("Playing sound: " .. sound)
+        -- print("Playing sound: " .. sound)
         SendNUIMessage({
             action = 'playSound',
             soundFile = sound,
             volume = 1.0
         })
     end
+    -- print("Playing animation: " .. dict .. " - " .. name)
     RequestAnimDict(dict)
     local waitSkip = 0
     while not HasAnimDictLoaded(dict) do
@@ -157,7 +158,6 @@ function finishQuest(questID)
     end
     ClearGpsMultiRoute()
     if DoesEntityExist(quest.target.obj) then
-        -- print("Playing start animation")
         playAnim(quest.target.obj, quest.target.animDict, quest.target.animName, 0, -1, quest.target.sound)
     end
     TriggerServerEvent("aprts_simplequests:server:finishQuest", questID)
@@ -214,6 +214,9 @@ function startQuest(questID)
     end
     if DoesEntityExist(quest.start.obj) then
         -- print("Playing start animation")
+        -- print("Starting quest animation for quest ID: " .. questID)
+        -- print(json.encode(quest.start, {indent = true}))
+        -- print(quest.start.obj, quest.start.animDict, quest.start.animName)
         playAnim(quest.start.obj, quest.start.animDict, quest.start.animName, 0, -1, quest.start.sound)
     end
 end
