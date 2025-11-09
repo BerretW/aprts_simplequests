@@ -21,7 +21,7 @@ class QuestEditor(QMainWindow):
         super().__init__()
         self.db = db_handler
         self.current_quest_id = None
-        self.setWindowTitle("RedM Quest Editor V1.2")
+        self.setWindowTitle("RedM Quest Editor V1.3")
         self.setGeometry(100, 100, 1200, 800)
 
         self._is_dirty = False
@@ -135,6 +135,9 @@ class QuestEditor(QMainWindow):
         self.start_npc = QLineEdit()
         self.start_coords = CoordsLineEdit()
         self.start_text = QTextEdit()
+        self.start_sound = QLineEdit() # <<< NOVÉ
+        self.start_anim_dict = QLineEdit() # <<< NOVÉ
+        self.start_anim_name = QLineEdit() # <<< NOVÉ
         self.start_prompt = PromptWidget()
         self.start_items = ItemsWidget(self.db, config.IMAGE_BASE_URL)
         self.start_events = EventsWidget()
@@ -143,6 +146,9 @@ class QuestEditor(QMainWindow):
         form_start.addRow("NPC model:", self.start_npc)
         form_start.addRow("Souřadnice:", self.start_coords)
         form_start.addRow("Text:", self.start_text)
+        form_start.addRow("Zvuk:", self.start_sound) # <<< NOVÉ
+        form_start.addRow("Animace (slovník):", self.start_anim_dict) # <<< NOVÉ
+        form_start.addRow("Animace (název):", self.start_anim_name) # <<< NOVÉ
         form_start.addRow("Prompt:", self.start_prompt)
         form_start.addRow("Předměty:", self.start_items)
         form_start.addRow("Eventy:", self.start_events)
@@ -156,6 +162,9 @@ class QuestEditor(QMainWindow):
         self.target_blip = QLineEdit()
         self.target_coords = CoordsLineEdit()
         self.target_text = QTextEdit()
+        self.target_sound = QLineEdit() # <<< NOVÉ
+        self.target_anim_dict = QLineEdit() # <<< NOVÉ
+        self.target_anim_name = QLineEdit() # <<< NOVÉ
         self.target_prompt = PromptWidget()
         self.target_items = ItemsWidget(self.db, config.IMAGE_BASE_URL)
         self.target_money = QSpinBox()
@@ -167,6 +176,9 @@ class QuestEditor(QMainWindow):
         form_target.addRow("Blip:", self.target_blip)
         form_target.addRow("Souřadnice:", self.target_coords)
         form_target.addRow("Text:", self.target_text)
+        form_target.addRow("Zvuk:", self.target_sound) # <<< NOVÉ
+        form_target.addRow("Animace (slovník):", self.target_anim_dict) # <<< NOVÉ
+        form_target.addRow("Animace (název):", self.target_anim_name) # <<< NOVÉ
         form_target.addRow("Prompt:", self.target_prompt)
         form_target.addRow("Předměty:", self.target_items)
         form_target.addRow("Peníze:", self.target_money)
@@ -314,6 +326,9 @@ class QuestEditor(QMainWindow):
             self.start_npc.setText(data.get('start_npc', ''))
             self.start_coords.setText(data.get('start_coords', ''))
             self.start_text.setText(data.get('start_text', ''))
+            self.start_sound.setText(data.get('start_sound', '')) # <<< DOPLNĚNO
+            self.start_anim_dict.setText(data.get('start_anim_dict', '')) # <<< DOPLNĚNO (pozor na překlep 'amin' z DB)
+            self.start_anim_name.setText(data.get('start_anim_name', '')) # <<< DOPLNĚNO
 
             self.target_activation.setCurrentText(data.get('target_activation', ''))
             self.target_param.setText(data.get('target_param', ''))
@@ -321,6 +336,9 @@ class QuestEditor(QMainWindow):
             self.target_blip.setText(data.get('target_blip', ''))
             self.target_coords.setText(data.get('target_coords', ''))
             self.target_text.setText(data.get('target_text', ''))
+            self.target_sound.setText(data.get('target_sound', '')) # <<< DOPLNĚNO
+            self.target_anim_dict.setText(data.get('target_anim_dict', '')) # <<< DOPLNĚNO (pozor na překlep 'amin' z DB)
+            self.target_anim_name.setText(data.get('target_anim_name', '')) # <<< DOPLNĚNO
             self.target_money.setValue(data.get('target_money', 0))
 
             self._populate_json_field(self.jobs, data.get('jobs'))
@@ -434,8 +452,30 @@ class QuestEditor(QMainWindow):
         self.name.selectAll()
 
     def get_data_from_form(self):
-        data = {'active': 1 if self.active.isChecked() else 0, 'name': self.name.text() or None, 'description': self.description.toPlainText() or None, 'repeatable': 1 if self.repeatable.isChecked() else 0, 'start_activation': self.start_activation.currentText() or None, 'start_param': self.start_param.text() or None, 'start_npc': self.start_npc.text() or None, 'start_coords': self.start_coords.text().replace(" ", "") or None,
-                'start_text': self.start_text.toPlainText() or None, 'target_activation': self.target_activation.currentText() or None, 'target_param': self.target_param.text() or None, 'target_npc': self.target_npc.text() or None, 'target_blip': self.target_blip.text() or None, 'target_coords': self.target_coords.text().replace(" ", "") or None, 'target_text': self.target_text.toPlainText() or None, 'target_money': self.target_money.value()}
+        data = {
+            'active': 1 if self.active.isChecked() else 0, 
+            'name': self.name.text() or None, 
+            'description': self.description.toPlainText() or None, 
+            'repeatable': 1 if self.repeatable.isChecked() else 0, 
+            'start_activation': self.start_activation.currentText() or None, 
+            'start_param': self.start_param.text() or None, 
+            'start_npc': self.start_npc.text() or None, 
+            'start_coords': self.start_coords.text().replace(" ", "") or None,
+            'start_text': self.start_text.toPlainText() or None, 
+            'start_sound': self.start_sound.text() or None, # <<< DOPLNĚNO
+            'start_anim_dict': self.start_anim_dict.text() or None, # <<< DOPLNĚNO
+            'start_anim_name': self.start_anim_name.text() or None, # <<< DOPLNĚNO
+            'target_activation': self.target_activation.currentText() or None, 
+            'target_param': self.target_param.text() or None, 
+            'target_npc': self.target_npc.text() or None, 
+            'target_blip': self.target_blip.text() or None, 
+            'target_coords': self.target_coords.text().replace(" ", "") or None, 
+            'target_text': self.target_text.toPlainText() or None, 
+            'target_sound': self.target_sound.text() or None, # <<< DOPLNĚNO
+            'target_anim_dict': self.target_anim_dict.text() or None, # <<< DOPLNĚNO
+            'target_anim_name': self.target_anim_name.text() or None, # <<< DOPLNĚNO
+            'target_money': self.target_money.value()
+        }
         for key, widget in {'start_prompt': self.start_prompt, 'target_prompt': self.target_prompt, 'start_items': self.start_items, 'target_items': self.target_items, 'start_events': self.start_events, 'target_events': self.target_events}.items():
             data[key] = json.dumps(
                 widget.getData(), ensure_ascii=False) if widget.getData() else None
