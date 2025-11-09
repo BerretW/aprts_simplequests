@@ -37,43 +37,50 @@ Citizen.CreateThread(function()
         local playerPos = GetEntityCoords(playerPed)
         local dist = 0.0
         for _, quest in pairs(Config.Quests) do
-            if not quest.active then
-                goto continue
-            end
-
-            -- Kontrola startu questu
-            if quest.start.coords and quest.start.NPC then
-                dist = #(playerPos - vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
-                if dist < 30.0 then
-                    if not DoesEntityExist(quest.start.obj) then
-                        quest.start.obj = spawnNPC(quest.start.NPC, quest.start.coords.x, quest.start.coords.y,
-                            quest.start.coords.z)
-                        SetEntityHeading(quest.start.obj, quest.start.coords.w)
-                    end
-                else
+            if reqCheck(quest.id) then
+                if not quest.active then
                     if DoesEntityExist(quest.start.obj) then
                         DeleteEntity(quest.start.obj)
                         quest.start.obj = nil
                     end
-                end
-            end
-            if quest.target.coords and quest.target.NPC then
-
-                dist = #(playerPos - vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z))
-                if dist < 30.0 then
-                    if not DoesEntityExist(quest.target.obj) then
-                        quest.target.obj = spawnNPC(quest.target.NPC, quest.target.coords.x, quest.target.coords.y,
-                            quest.target.coords.z)
-                        SetEntityHeading(quest.target.obj, quest.target.coords.w)
-                    end
-                else
                     if DoesEntityExist(quest.target.obj) then
                         DeleteEntity(quest.target.obj)
                         quest.target.obj = nil
                     end
+                else
+                    if quest.start.coords and quest.start.NPC then
+                        dist = #(playerPos - vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
+                        if dist < 30.0 then
+                            if not DoesEntityExist(quest.start.obj) then
+                                quest.start.obj = spawnNPC(quest.start.NPC, quest.start.coords.x, quest.start.coords.y,
+                                    quest.start.coords.z)
+                                SetEntityHeading(quest.start.obj, quest.start.coords.w)
+                            end
+                        else
+                            if DoesEntityExist(quest.start.obj) then
+                                DeleteEntity(quest.start.obj)
+                                quest.start.obj = nil
+                            end
+                        end
+                    end
+                    if quest.target.coords and quest.target.NPC then
+                        dist = #(playerPos -
+                                   vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z))
+                        if dist < 30.0 then
+                            if not DoesEntityExist(quest.target.obj) then
+                                quest.target.obj = spawnNPC(quest.target.NPC, quest.target.coords.x,
+                                    quest.target.coords.y, quest.target.coords.z)
+                                SetEntityHeading(quest.target.obj, quest.target.coords.w)
+                            end
+                        else
+                            if DoesEntityExist(quest.target.obj) then
+                                DeleteEntity(quest.target.obj)
+                                quest.target.obj = nil
+                            end
+                        end
+                    end
                 end
             end
-            ::continue::
         end
         Citizen.Wait(pause)
     end

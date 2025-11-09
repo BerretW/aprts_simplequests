@@ -73,7 +73,6 @@ local function prompt()
     end)
 end
 
-
 function CreateBlip(coords, sprite, name)
     -- print("Creating Blip: ")
     -- hash sprite if is string
@@ -88,13 +87,12 @@ function CreateBlip(coords, sprite, name)
 end
 
 function SetBlipStyle(blip, styleHash)
-    -- hash if stylehash is string
-    if type(styleHash) == "string" then
-        styleHash = GetHashKey(styleHash)
-    end
-    Citizen.InvokeNative(0x9CB1A1623062F402, blip, styleHash)
+    -- -- hash if stylehash is string
+    -- if type(styleHash) == "string" then
+    --     styleHash = GetHashKey(styleHash)
+    -- end
+    -- Citizen.InvokeNative(0x9CB1A1623062F402, blip, styleHash)
 end
-
 
 function createRoute(coords)
     SetWaypointOff()
@@ -104,7 +102,6 @@ function createRoute(coords)
     AddPointToGpsMultiRoute(coords.x, coords.y, coords.z)
     SetGpsMultiRouteRender(true)
 end
-
 
 function giveItems(items)
     if items then
@@ -120,7 +117,6 @@ function finishQuest(questID)
     if quest.target.events and quest.target.events.client then
         for _, event in pairs(quest.target.events.client) do
 
-            
             TriggerEvent(event.name, event.args[1], event.args[2], event.args[3], event.args[4], event.args[5])
         end
     end
@@ -138,6 +134,28 @@ function finishQuest(questID)
     end
     ClearGpsMultiRoute()
     TriggerServerEvent("aprts_simplequests:server:finishQuest", questID)
+end
+
+function reqCheck(questID)
+    local quest = Config.Quests[questID]
+    local charId = LocalPlayer.state.Character.id
+    if not quest.complete_quests or table.count(quest.complete_quests) == 0 then
+        return true
+    end
+    local completed = false
+    for _, reqQuestID in pairs(quest.complete_quests) do
+        if Config.Quests[reqQuestID] then
+            if Config.Quests[reqQuestID].active == false then
+                completed = true
+            else
+                completed = false
+                break
+            end
+        else
+            completed = true
+        end
+    end
+    return completed
 end
 
 function startQuest(questID)
@@ -163,9 +181,9 @@ function startQuest(questID)
     end
     if quest.target.coords and quest.target.blip then
         createRoute(quest.target.coords)
-       TargetBlip = CreateBlip(quest.target.coords, quest.target.blip or "blip_mission", quest.name)
-       SetBlipStyle(TargetBlip, "BLIP_STYLE_BOUNTY_TARGET")
-       --
+        TargetBlip = CreateBlip(quest.target.coords, quest.target.blip or "blip_mission", quest.name)
+        SetBlipStyle(TargetBlip, "BLIP_STYLE_BOUNTY_TARGET")
+        --
     end
 end
 
@@ -177,36 +195,35 @@ Citizen.CreateThread(function()
         local pcoords = GetEntityCoords(playerPed)
         if ActiveQuestID == 0 then
             for _, quest in pairs(Config.Quests) do
-
-                if (quest.start.activation == "talktoNPC" or quest.start.activation == "distance") and quest.active ==
-                    true and hasJob(quest.start.jobs) then
-                    local dist = #(pcoords - vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
-                    if quest.start.activation == "talktoNPC" then
-                        if dist < 1.2 then
-                            pause = 0
-                            PromptSetActiveGroupThisFrame(promptGroup, CreateVarString(10, 'LITERAL_STRING',
-                                quest.start.prompt.groupText))
-                            PromptSetText(Prompt, CreateVarString(10, 'LITERAL_STRING', quest.start.prompt.text))
-                            if PromptHasHoldModeCompleted(Prompt) then
-                                startQuest(quest.id)
-                                Wait(500)
+                if reqCheck(quest.id) then
+                    -- print("Checking quest: " .. quest.name .. " (ID: " .. quest.id .. ")" .. " Active: " .. tostring(quest.active))
+                    if (quest.start.activation == "talktoNPC" or quest.start.activation == "distance") and quest.active and hasJob(quest.start.jobs) then
+                        local dist = #(pcoords - vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
+                        if quest.start.activation == "talktoNPC" then
+                            if dist < 1.2 then
+                                pause = 0
+                                PromptSetActiveGroupThisFrame(promptGroup, CreateVarString(10, 'LITERAL_STRING',
+                                    quest.start.prompt.groupText))
+                                PromptSetText(Prompt, CreateVarString(10, 'LITERAL_STRING', quest.start.prompt.text))
+                                if PromptHasHoldModeCompleted(Prompt) then
+                                    startQuest(quest.id)
+                                    Wait(500)
+                                end
+                                break
                             end
-                            break
-                        end
-                    elseif quest.start.activation == "distance" then
-                        if dist < quest.start.param then
-                            startQuest(quest.id)
-                            break
+                        elseif quest.start.activation == "distance" then
+                            if dist < tonumber(quest.start.param) then
+                                startQuest(quest.id)
+                                break
+                            end
                         end
                     end
                 end
             end
-
         end
         Citizen.Wait(pause)
     end
 end)
-
 
 Citizen.CreateThread(function()
 

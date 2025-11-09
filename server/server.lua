@@ -192,7 +192,7 @@ function LoadQuests()
                     description = quest.description,
                     jobs = safeJsonDecode(quest.jobs, quest.id, 'jobs'),
                     repeatable = quest.repeatable,
-
+                    complete_quests = safeJsonDecode(quest.complete_quests, quest.id, 'complete_quests') or {},
                     start = {
                         activation = quest.start_activation,
                         param = quest.start_param,

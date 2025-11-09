@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QTableWidget, QTableWidgetItem, QPushButton, QSpinBox,
     QLabel, QHeaderView, QMessageBox, QDialog, QDialogButtonBox,
-    QFormLayout, QComboBox, QListWidget, QListWidgetItem
+    QFormLayout, QComboBox, QListWidget, QListWidgetItem, QAbstractItemView
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap
@@ -280,3 +280,60 @@ class EventsWidget(QWidget):
         server_count = len(self.events_data.get("server", [])); client_count = len(self.events_data.get("client", []))
         total = server_count + client_count
         self.summary_label.setText(f"Počet eventů: {total} (Server: {server_count}, Client: {client_count})" if total > 0 else "Žádné eventy")
+
+class QuestSelectionDialog(QDialog):
+    """
+    Dialogové okno pro výběr předcházejících questů ze seznamu.
+    """
+    def __init__(self, db_handler, preselected_ids=None, parent=None):
+        super().__init__(parent)
+        self.db = db_handler
+        if preselected_ids is None:
+            preselected_ids = []
+
+        self.setWindowTitle("Vyberte požadované splněné questy")
+        self.setMinimumSize(400, 500)
+        self.setModal(True)
+
+        layout = QVBoxLayout(self)
+
+        # Seznam pro zobrazení questů
+        self.quest_list = QListWidget()
+        # Povolíme výběr více položek pomocí Ctrl nebo Shift
+        self.quest_list.setSelectionMode(QAbstractItemView.SelectionMode.MultiSelection)
+        layout.addWidget(self.quest_list)
+
+        # Tlačítka OK a Zrušit
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+        # Naplníme seznam questy
+        self.populate_quests()
+        # Předvybereme již nastavené questy
+        self.preselect_items(preselected_ids)
+
+    def populate_quests(self):
+        """Načte všechny questy z databáze a zobrazí je v seznamu."""
+        all_quests = self.db.get_all_quests()
+        for quest in all_quests:
+            item = QListWidgetItem(f"{quest['id']}: {quest['name']}")
+            item.setData(Qt.ItemDataRole.UserRole, quest['id'])
+            self.quest_list.addItem(item)
+
+    def preselect_items(self, ids_to_select):
+        """Označí v seznamu questy, jejichž ID jsou v 'ids_to_select'."""
+        id_set = set(ids_to_select) # Použití setu pro rychlejší vyhledávání
+        for i in range(self.quest_list.count()):
+            item = self.quest_list.item(i)
+            quest_id = item.data(Qt.ItemDataRole.UserRole)
+            if quest_id in id_set:
+                item.setSelected(True)
+
+    def get_selected_ids(self):
+        """Vrátí seznam ID všech vybraných questů."""
+        selected_ids = []
+        for item in self.quest_list.selectedItems():
+            selected_ids.append(item.data(Qt.ItemDataRole.UserRole))
+        return sorted(selected_ids)

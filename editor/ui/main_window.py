@@ -1,4 +1,4 @@
-# /Váš_Projekt/ui/main_window.py
+# editor/ui/main_window.py
 
 import json
 from PyQt6.QtWidgets import (
@@ -9,11 +9,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt
 
-import config 
-from .custom_widgets import PromptWidget, ItemsWidget, CoordsLineEdit, EventsWidget
+import config
+from .custom_widgets import PromptWidget, ItemsWidget, CoordsLineEdit, EventsWidget, QuestSelectionDialog
 
 class QuestEditor(QMainWindow):
-    # ... __init__ zůstává beze změny ...
+    # ... __init__ beze změny ...
     def __init__(self, db_handler):
         super().__init__()
         self.db = db_handler
@@ -23,26 +23,38 @@ class QuestEditor(QMainWindow):
         self.init_ui()
         self.load_quests()
 
+    # --- ZMĚNĚNÁ METODA ---
     def init_ui(self):
         main_widget = QWidget(); self.setCentralWidget(main_widget); main_layout = QHBoxLayout(main_widget)
         splitter = QSplitter(Qt.Orientation.Horizontal); main_layout.addWidget(splitter)
         
-        # Levý panel s tlačítky
+        # Levý panel (beze změny)
         left_panel = QWidget(); left_layout = QVBoxLayout(left_panel)
         left_layout.addWidget(QLabel("Seznam Questů"))
         self.quest_list = QListWidget(); self.quest_list.currentItemChanged.connect(self.display_quest_details); left_layout.addWidget(self.quest_list)
-        
-        # Tlačítka pod seznamem
         left_button_layout = QHBoxLayout()
         new_quest_btn = QPushButton("Nový"); new_quest_btn.clicked.connect(self.new_quest)
-        self.copy_quest_btn = QPushButton("Kopírovat"); self.copy_quest_btn.clicked.connect(self.copy_quest); self.copy_quest_btn.setEnabled(False) # Výchozí je neaktivní
+        self.copy_quest_btn = QPushButton("Kopírovat"); self.copy_quest_btn.clicked.connect(self.copy_quest); self.copy_quest_btn.setEnabled(False)
         left_button_layout.addWidget(new_quest_btn); left_button_layout.addWidget(self.copy_quest_btn)
         left_layout.addLayout(left_button_layout)
-        
         splitter.addWidget(left_panel)
         
-        # Pravý panel (beze změny)
-        right_panel = QWidget(); right_layout = QVBoxLayout(right_panel); self.tabs = QTabWidget(); self.init_form_tabs()
+        # Pravý panel
+        right_panel = QWidget(); right_layout = QVBoxLayout(right_panel)
+        
+        # --- NOVÝ PRVEK: Velký nadpis pro aktuální quest ---
+        self.current_quest_title_label = QLabel("Vyberte quest z nabídky")
+        self.current_quest_title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.current_quest_title_label.setStyleSheet("""
+            font-size: 22pt;
+            font-weight: bold;
+            color: #3498db; /* Barva ladící se zbytkem UI */
+            margin-bottom: 10px;
+        """)
+        right_layout.addWidget(self.current_quest_title_label)
+        # ----------------------------------------------------
+
+        self.tabs = QTabWidget(); self.init_form_tabs()
         right_layout.addWidget(self.tabs)
         
         button_layout = QHBoxLayout(); self.save_btn = QPushButton("Uložit Quest")
@@ -60,8 +72,13 @@ class QuestEditor(QMainWindow):
         self.name = QLineEdit(); self.description = QTextEdit()
         self.active = QCheckBox(); self.repeatable = QCheckBox(); self.jobs = QTextEdit()
         self.jobs.setToolTip("Zadejte jako JSON pole objektů, např.:\n[{\"job\": \"police\", \"grade\": 1}]")
+        self.complete_quests_display = QLineEdit(); self.complete_quests_display.setReadOnly(True)
+        self.complete_quests_display.setToolTip("Seznam ID questů, které musí být splněny. Upravte pomocí tlačítka vpravo.")
+        select_quests_btn = QPushButton("Vybrat..."); select_quests_btn.clicked.connect(self.open_quest_selection_dialog)
+        completed_quests_layout = QHBoxLayout(); completed_quests_layout.addWidget(self.complete_quests_display); completed_quests_layout.addWidget(select_quests_btn)
         form_general.addRow("ID:", self.id); form_general.addRow("Název:", self.name); form_general.addRow("Popis:", self.description)
-        form_general.addRow("Aktivní:", self.active); form_general.addRow("Opakovatelný:", self.repeatable); form_general.addRow("Požadované práce (JSON):", self.jobs)
+        form_general.addRow("Aktivní:", self.active); form_general.addRow("Opakovatelný:", self.repeatable)
+        form_general.addRow("Požadované práce (JSON):", self.jobs); form_general.addRow("Vyžaduje splněné questy:", completed_quests_layout)
         self.tabs.addTab(tab_general, "Obecné")
         activation_types = ["", "talktoNPC", "distance", "useItem", "clientEvent"]
         tab_start = QWidget(); form_start = QFormLayout(tab_start)
@@ -85,8 +102,8 @@ class QuestEditor(QMainWindow):
         for quest in self.db.get_all_quests():
             item = QListWidgetItem(f"{quest['id']}: {quest['name']}"); item.setData(Qt.ItemDataRole.UserRole, quest['id']); self.quest_list.addItem(item)
     
+    # --- ZMĚNĚNÁ METODA ---
     def display_quest_details(self, current_item, _):
-        # Aktivujeme/deaktivujeme tlačítko Kopírovat
         self.copy_quest_btn.setEnabled(bool(current_item))
         
         if not current_item:
@@ -97,18 +114,28 @@ class QuestEditor(QMainWindow):
         self.current_quest_id = current_item.data(Qt.ItemDataRole.UserRole)
         details = self.db.get_quest_details(self.current_quest_id)
         if details:
-            # Plnění formuláře - metoda fill_form_with_data pro znovupoužitelnost
+            # --- PŘIDÁNO: Aktualizace nadpisu ---
+            self.current_quest_title_label.setText(f"Úprava: {details.get('name', '')} (ID: {self.current_quest_id})")
             self.fill_form_with_data(details)
             self.set_form_enabled(True)
             self.delete_btn.setEnabled(True)
 
+    # ... fill_form_with_data, _safe_json_decode, _populate_json_field beze změny ...
     def fill_form_with_data(self, data):
-        """Pomocná metoda pro naplnění formuláře daty (slovníkem)."""
         self.id.setText(str(data.get('id', '')))
         self.name.setText(data.get('name', ''))
         self.description.setText(data.get('description', ''))
         self.active.setChecked(bool(data.get('active', 0)))
         self.repeatable.setChecked(bool(data.get('repeatable', 0)))
+        completed_quests_json = data.get('complete_quests')
+        if completed_quests_json:
+            try:
+                quest_ids = json.loads(completed_quests_json)
+                self.complete_quests_display.setText(", ".join(map(str, quest_ids)))
+            except (json.JSONDecodeError, TypeError):
+                self.complete_quests_display.setText("")
+        else:
+            self.complete_quests_display.setText("")
         self.start_activation.setCurrentText(data.get('start_activation', ''))
         self.start_param.setText(data.get('start_param', ''))
         self.start_npc.setText(data.get('start_npc', ''))
@@ -128,8 +155,6 @@ class QuestEditor(QMainWindow):
         self.target_items.setData(self._safe_json_decode(data.get('target_items')))
         self.start_events.setData(self._safe_json_decode(data.get('start_events')))
         self.target_events.setData(self._safe_json_decode(data.get('target_events')))
-
-    # ... _safe_json_decode a _populate_json_field jsou beze změny ...
     def _safe_json_decode(self, json_string):
         if not json_string: return None
         try: return json.loads(json_string)
@@ -138,52 +163,70 @@ class QuestEditor(QMainWindow):
         if not data: widget.setText(""); return
         try: widget.setText(json.dumps(json.loads(data), indent=4, ensure_ascii=False))
         except json.JSONDecodeError: widget.setText(data)
-
+        
+    # --- ZMĚNĚNÁ METODA ---
     def clear_form(self):
-        # ... beze změny ...
+        # --- PŘIDÁNO: Resetování nadpisu ---
+        self.current_quest_title_label.setText("Vyberte quest z nabídky")
+        self.complete_quests_display.clear()
         for widget in self.findChildren((QLineEdit, QTextEdit)): widget.clear()
         for widget in self.findChildren((PromptWidget, ItemsWidget, EventsWidget)): widget.clear()
         self.active.setChecked(True); self.repeatable.setChecked(False); self.target_money.setValue(0); self.start_activation.setCurrentIndex(0); self.target_activation.setCurrentIndex(0)
         self.current_quest_id = None
         
+    # --- ZMĚNĚNÁ METODA ---
     def new_quest(self):
-        # ... beze změny ...
         self.quest_list.clearSelection()
-        self.clear_form(); self.id.setText("<Automaticky>"); self.current_quest_id = None
+        self.clear_form()
+        # --- PŘIDÁNO: Nastavení nadpisu pro nový quest ---
+        self.current_quest_title_label.setText("Tvorba nového questu")
+        self.id.setText("<Automaticky>"); self.current_quest_id = None
         self.set_form_enabled(True); self.delete_btn.setEnabled(False); self.name.setFocus()
         self.statusBar().showMessage("Připraven pro vytvoření nového questu.", 3000)
 
+    # ... open_quest_selection_dialog beze změny ...
+    def open_quest_selection_dialog(self):
+        current_ids_text = self.complete_quests_display.text()
+        current_ids = []
+        if current_ids_text:
+            try:
+                current_ids = [int(q_id.strip()) for q_id in current_ids_text.split(',') if q_id.strip()]
+            except ValueError:
+                QMessageBox.warning(self, "Chyba formátu", "Pole obsahuje neplatná data. Budou ignorována.")
+        dialog = QuestSelectionDialog(self.db, current_ids, self)
+        if dialog.exec():
+            selected_ids = dialog.get_selected_ids()
+            self.complete_quests_display.setText(", ".join(map(str, selected_ids)))
+            
+    # --- ZMĚNĚNÁ METODA ---
     def copy_quest(self):
-        """Vytvoří kopii aktuálně vybraného questu."""
         if not self.current_quest_id:
             QMessageBox.warning(self, "Chyba", "Nejprve vyberte quest, který chcete kopírovat.")
             return
 
-        # 1. Získáme data aktuálního questu z formuláře
-        # (ne z DB, aby se kopírovaly i neuložené změny)
         data = self.get_data_from_form()
-        if not data: return # Pokud se nepodaří získat data, skončíme
+        if not data: return
 
-        # 2. Připravíme data pro nový quest
+        original_name = data.get('name', 'Quest')
         data['id'] = "<Automaticky>"
-        data['name'] = f"{data.get('name', 'Quest')} - KOPIE"
+        data['name'] = f"{original_name} - KOPIE"
         
-        # 3. Odznačíme položku v seznamu a naplníme formulář
         self.quest_list.clearSelection()
         self.fill_form_with_data(data)
         
-        # 4. Nastavíme stav jako pro "Nový quest"
+        # --- PŘIDÁNO: Nastavení nadpisu pro kopírovaný quest ---
+        self.current_quest_title_label.setText(f"Tvorba kopie: {original_name}")
+
         self.current_quest_id = None
         self.set_form_enabled(True)
         self.delete_btn.setEnabled(False)
         self.name.setFocus()
         self.name.selectAll()
-        self.statusBar().showMessage(f"Vytvořena kopie questu ID {self.current_quest_id}. Uložte pro vygenerování nového ID.", 5000)
+        self.statusBar().showMessage(f"Vytvořena kopie questu. Uložte pro vygenerování nového ID.", 5000)
 
+    # ... set_form_enabled, get_data_from_form, save_quest, delete_quest beze změny ...
     def set_form_enabled(self, enabled): self.tabs.setEnabled(enabled); self.save_btn.setEnabled(enabled); self.delete_btn.setEnabled(enabled)
-
     def get_data_from_form(self):
-        """Pomocná metoda, která sebere všechna data z formuláře a vrátí je jako slovník."""
         data = {
             'active': 1 if self.active.isChecked() else 0, 'name': self.name.text() or None, 'description': self.description.toPlainText() or None,
             'repeatable': 1 if self.repeatable.isChecked() else 0, 'start_activation': self.start_activation.currentText() or None, 'start_param': self.start_param.text() or None,
@@ -196,28 +239,40 @@ class QuestEditor(QMainWindow):
             'start_prompt': self.start_prompt, 'target_prompt': self.target_prompt, 'start_items': self.start_items,
             'target_items': self.target_items, 'start_events': self.start_events, 'target_events': self.target_events
         }.items(): data[key] = json.dumps(widget.getData(), ensure_ascii=False) if widget.getData() else None
-        
         try: data['jobs'] = json.dumps(json.loads(self.jobs.toPlainText().strip()), ensure_ascii=False) if self.jobs.toPlainText().strip() else None
         except json.JSONDecodeError as e: QMessageBox.warning(self, "Chyba ve formátu", f"Pole 'jobs' neobsahuje validní JSON.\n{e}"); return None
-        
+        completed_text = self.complete_quests_display.text().strip()
+        if completed_text:
+            try:
+                quest_ids = [int(q_id.strip()) for q_id in completed_text.split(',') if q_id.strip()]
+                data['complete_quests'] = json.dumps(quest_ids)
+            except ValueError:
+                QMessageBox.warning(self, "Chyba ve formátu", "Pole 'Vyžaduje splněné questy' obsahuje nečíselné hodnoty.")
+                return None
+        else:
+            data['complete_quests'] = None
         return data
-
     def save_quest(self):
+        quest_id_text = str(self.current_quest_id) if self.current_quest_id else "Nový quest"
+        quest_name_text = self.name.text() or "<bez názvu>"
+        reply = QMessageBox.question(self, "Potvrzení uložení", 
+                                     f"Opravdu chcete uložit quest?\n\nID: {quest_id_text}\nNázev: {quest_name_text}",
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply == QMessageBox.StandardButton.No: return
         data = self.get_data_from_form()
-        if not data: return # Pokud nastala chyba (např. nevalidní JSON), ukončíme
-
-        success, message = self.db.save_quest(data, self.current_quest_id)
-        
+        if not data: return
+        success, message, saved_id = self.db.save_quest(data, self.current_quest_id)
         if success: 
             QMessageBox.information(self, "Úspěch", message)
             self.load_quests()
-            if not self.current_quest_id: # Pokud jsme ukládali nový quest
-                self.new_quest()
+            for i in range(self.quest_list.count()):
+                item = self.quest_list.item(i)
+                if item.data(Qt.ItemDataRole.UserRole) == saved_id:
+                    self.quest_list.setCurrentItem(item)
+                    break
         else: 
             QMessageBox.critical(self, "Chyba při ukládání", message)
-
     def delete_quest(self):
-        # ... beze změny ...
         if not self.current_quest_id: return
         if QMessageBox.question(self, "Potvrzení", f"Opravdu smazat quest ID {self.current_quest_id}?") == QMessageBox.StandardButton.Yes:
             if self.db.delete_quest(self.current_quest_id):
