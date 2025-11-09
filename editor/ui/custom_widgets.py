@@ -12,6 +12,25 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap
 
+
+class SafeListWidget(QListWidget):
+    """
+    QListWidget, který před změnou výběru zkontroluje neuložené změny
+    v hlavním okně.
+    """
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+
+    def mousePressEvent(self, event):
+        # Než zpracujeme kliknutí myši, které by mohlo změnit položku...
+        if not self.main_window._check_unsaved_changes():
+            # ...pokud uživatel akci zrušil, ignorujeme toto kliknutí.
+            return
+        # Pokud je vše v pořádku, pokračujeme v normálním chování.
+        super().mousePressEvent(event)
+
+        
 # --- Worker pro asynchronní načítání obrázků (beze změny) ---
 class ImageLoader(QObject):
     image_loaded = pyqtSignal(int, QPixmap)
