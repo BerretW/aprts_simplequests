@@ -14,7 +14,7 @@ AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
         Config.Quests[quest.id] = quest
     end
     for _, quest in pairs(Config.Quests) do
-        if quest.start.activation == "clientEvent" and quest.active then
+        if quest.start.activation == "clientEvent" and quest.active and reqCheck(quest.id) then
             debugPrint("Registering client event for quest start: " .. quest.start.param)
             AddEventHandler(quest.start.param, function()
                 ActiveQuestID = quest.id
@@ -74,7 +74,7 @@ end)
 RegisterNetEvent("aprts_simplequests:client:onQuestStartUseItem")
 AddEventHandler("aprts_simplequests:client:onQuestStartUseItem", function(questId)
     local quest = Config.Quests[questId]
-    if quest.active == false then
+    if quest.active == false or not reqCheck(questId) then
         print("Tento úkol není aktivní.")
         return
     end
