@@ -55,6 +55,29 @@ function hasJob(jobtable)
     end
     return false
 end
+
+function playAnim(entity, dict, name, flag, time, sound)
+    if sound then
+        print("Playing sound: " .. sound)
+        SendNUIMessage({
+            action = 'playSound',
+            soundFile = sound,
+            volume = 1.0
+        })
+    end
+    RequestAnimDict(dict)
+    local waitSkip = 0
+    while not HasAnimDictLoaded(dict) do
+        waitSkip = waitSkip + 1
+        if waitSkip > 100 then
+            break
+        end
+        Citizen.Wait(0)
+    end
+    TaskPlayAnim(entity, dict, name, 1.0, 1.0, time, flag, 0, true, 0, false, 0, false)
+    Wait(time)
+end
+
 -- SetResourceKvp("aprts_vzor:deht", 0)
 -- local deht = GetResourceKvpString("aprts_vzor:deht")
 
@@ -133,6 +156,10 @@ function finishQuest(questID)
         TargetBlip = nil
     end
     ClearGpsMultiRoute()
+    if DoesEntityExist(quest.target.obj) then
+        -- print("Playing start animation")
+        playAnim(quest.target.obj, quest.target.animDict, quest.target.animName, 0, -1, quest.target.sound)
+    end
     TriggerServerEvent("aprts_simplequests:server:finishQuest", questID)
 end
 
@@ -185,6 +212,10 @@ function startQuest(questID)
         SetBlipStyle(TargetBlip, "BLIP_STYLE_BOUNTY_TARGET")
         --
     end
+    if DoesEntityExist(quest.start.obj) then
+        -- print("Playing start animation")
+        playAnim(quest.start.obj, quest.start.animDict, quest.start.animName, 0, -1, quest.start.sound)
+    end
 end
 
 Citizen.CreateThread(function()
@@ -197,8 +228,10 @@ Citizen.CreateThread(function()
             for _, quest in pairs(Config.Quests) do
                 if reqCheck(quest.id) then
                     -- print("Checking quest: " .. quest.name .. " (ID: " .. quest.id .. ")" .. " Active: " .. tostring(quest.active))
-                    if (quest.start.activation == "talktoNPC" or quest.start.activation == "distance") and quest.active and hasJob(quest.start.jobs) then
-                        local dist = #(pcoords - vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
+                    if (quest.start.activation == "talktoNPC" or quest.start.activation == "distance") and quest.active and
+                        hasJob(quest.start.jobs) then
+                        local dist = #(pcoords -
+                                         vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
                         if quest.start.activation == "talktoNPC" then
                             if dist < 1.2 then
                                 pause = 0

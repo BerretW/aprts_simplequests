@@ -161,7 +161,7 @@ end
 
 QuestsLoaded = false
 function LoadQuests()
-    MySQL:execute("SELECT * FROM aprts_simplequests_quests WHERE active = 1", {}, function(result)
+    MySQL:execute("SELECT * FROM aprts_simplequests_quests", {}, function(result)
         local tempQuests = {}
         if result and #result > 0 then
             
@@ -197,7 +197,11 @@ function LoadQuests()
                         activation = quest.start_activation,
                         param = quest.start_param,
                         NPC = quest.start_npc,
+                        blip = quest.start_blip or 0,
+                        aminDict = quest.start_amin_dict or nil,
+                        aminName = quest.start_amin_name or nil,
                         coords = vec4FromString(quest.start_coords),
+                        sound = quest.start_sound or nil,
                         text = quest.start_text,
                         prompt = safeJsonDecode(quest.start_prompt, quest.id, 'start_prompt'),
                         items = safeJsonDecode(quest.start_items, quest.id, 'start_items') or {}, -- Pokud je nil, použije se prázdná tabulka
@@ -207,8 +211,11 @@ function LoadQuests()
                         activation = quest.target_activation,
                         param = quest.target_param,
                         NPC = quest.target_npc,
-                        blip = quest.target_blip,
+                        blip = quest.target_blip or 0,
+                        aminDict = quest.target_amin_dict or nil,
+                        aminName = quest.target_amin_name or nil,
                         coords = vec4FromString(quest.target_coords),
+                        sound = quest.target_sound or nil,
                         text = quest.target_text,
                         prompt = safeJsonDecode(quest.target_prompt, quest.id, 'target_prompt'),
                         items = safeJsonDecode(quest.target_items, quest.id, 'target_items') or {},

@@ -10,3 +10,13 @@ games {"rdr3"}
 
 client_scripts {'config.lua','client/client.lua','client/events.lua','client/renderer.lua','client/visualizer.lua','client/commands.lua',}
 server_scripts {'@oxmysql/lib/MySQL.lua','config.lua','server/server.lua','server/events.lua','server/commands.lua',}
+ui_page 'html/index.html'
+
+
+-- Zahrnutí souborů pro NUI
+files {
+    'html/index.html',
+    'html/script.js',
+    'html/sounds/*.ogg',
+    'html/sounds/*.mp3'
+}
