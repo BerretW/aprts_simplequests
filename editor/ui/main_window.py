@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
     QListWidget, QFormLayout, QLineEdit, QTextEdit, QCheckBox,
     QPushButton, QTabWidget, QSplitter, QMessageBox,
     QSpinBox, QLabel, QListWidgetItem, QComboBox, 
-    QTreeWidgetItem, QTreeWidget, QInputDialog # <-- Přidán QInputDialog
+    QTreeWidgetItem, QTreeWidget, QInputDialog
 )
 from PyQt6.QtCore import Qt
 
@@ -21,7 +21,7 @@ class QuestEditor(QMainWindow):
         super().__init__()
         self.db = db_handler
         self.current_quest_id = None
-        self.setWindowTitle("APRTS SimpleQuest Editor V1.6 - Group Management") 
+        self.setWindowTitle("APRTS SimpleQuest Editor V1.7 - Hints") 
         self.setGeometry(100, 100, 1200, 800)
 
         self._is_dirty = False
@@ -29,6 +29,42 @@ class QuestEditor(QMainWindow):
         self.quest_tree_window = None
 
         self.quest_groups = [] 
+
+        # --- DEFINICE NÁPOVĚD ---
+        self.param_hints = {
+            "kill": {
+                "placeholder": "model,amount,spawn(0/1),range",
+                "tooltip": "Formát: Model, Počet, Spawn(1=ano/0=ne), Radius\nPříklad: a_c_pronghorn_01,3,1,30"
+            },
+            "delivery": {
+                "placeholder": "item,count;item2,count2",
+                "tooltip": "Seznam předmětů k doručení oddělený středníkem.\nPříklad: branch,5;wood,1"
+            },
+            "talktoNPC": {
+                "placeholder": "item,count;item2,count2",
+                "tooltip": "Seznam předmětů vyžadovaných pro interakci.\nPříklad: branch,5;wood,1\nNebo nechte prázdné pro pouhý rozhovor."
+            },
+            "distance": {
+                "placeholder": "vzdálenost (např. 5.0)",
+                "tooltip": "Vzdálenost od souřadnic v metrech, kdy se quest splní/aktivuje."
+            },
+            "useItem": {
+                "placeholder": "název_itemu",
+                "tooltip": "Technický název předmětu, který musí hráč použít.\nPříklad: weapon_hammer"
+            },
+            "clientEvent": {
+                "placeholder": "název_eventu",
+                "tooltip": "Název klientského eventu, který quest aktivuje/splní."
+            },
+            "prop": {
+                "placeholder": "item,count;item2,count2",
+                "tooltip": "Seznam předmětů k doručení oddělený středníkem.\nPříklad: branch,5;wood,1"
+            },
+            "": {
+                "placeholder": "",
+                "tooltip": "Žádný parametr."
+            }
+        }
 
         self.init_ui()
         self.load_quests()
@@ -67,7 +103,7 @@ class QuestEditor(QMainWindow):
         quest_btns_layout.addWidget(self.copy_quest_btn)
         left_layout.addLayout(quest_btns_layout)
 
-        # Tlačítka pro Skupiny (Oddělená sekce)
+        # Tlačítka pro Skupiny
         left_layout.addWidget(QLabel("Správa skupin:"))
         group_btns_layout = QHBoxLayout()
         
@@ -77,12 +113,12 @@ class QuestEditor(QMainWindow):
         
         self.rename_group_btn = QPushButton("Přejmenovat")
         self.rename_group_btn.clicked.connect(self.rename_group)
-        self.rename_group_btn.setEnabled(False) # Defaultně vypnuto
+        self.rename_group_btn.setEnabled(False) 
         
         self.del_group_btn = QPushButton("Smazat")
         self.del_group_btn.clicked.connect(self.delete_group)
-        self.del_group_btn.setStyleSheet("background-color: #c0392b;") # Červená pro smazat
-        self.del_group_btn.setEnabled(False) # Defaultně vypnuto
+        self.del_group_btn.setStyleSheet("background-color: #c0392b;") 
+        self.del_group_btn.setEnabled(False) 
 
         group_btns_layout.addWidget(self.new_group_btn)
         group_btns_layout.addWidget(self.rename_group_btn)
@@ -110,7 +146,7 @@ class QuestEditor(QMainWindow):
         self.save_btn = QPushButton("Uložit Quest")
         self.save_btn.clicked.connect(self.save_quest)
         self.delete_btn = QPushButton("Smazat Quest")
-        self.delete_btn.clicked.connect(self.delete_quest_action) # Přejmenováno metodu pro quest
+        self.delete_btn.clicked.connect(self.delete_quest_action)
         button_layout.addWidget(self.save_btn)
         button_layout.addWidget(self.delete_btn)
         right_layout.addLayout(button_layout)
@@ -119,7 +155,6 @@ class QuestEditor(QMainWindow):
         splitter.setSizes([350, 850])
         self.set_form_enabled(False)
 
-    # ... (init_form_tabs zůstává stejný) ...
     def init_form_tabs(self):
         # --- TAB: OBECNÉ ---
         tab_general = QWidget()
@@ -130,7 +165,7 @@ class QuestEditor(QMainWindow):
         if self.group_combo.count() == 0: self.group_combo.addItem("Default Group (ID 1)", 1)
         self.name = QLineEdit(); self.description = QTextEdit(); self.hours_widget = HoursWidget()
         self.active = QCheckBox(); self.repeatable = QCheckBox()
-        self.jobs = QTextEdit(); self.jobs.setToolTip("Zadejte jako JSON pole objektů.")
+        self.jobs = QTextEdit(); self.jobs.setToolTip("Zadejte jako JSON pole objektů.\nNapř: [{\"job\": \"police\", \"grade\": 0}]")
         self.blacklistJobs = QTextEdit(); self.blacklistJobs.setToolTip("Zadejte jako JSON pole jobů.")
         self.complete_quests_display = QLineEdit(); self.complete_quests_display.setReadOnly(True)
         select_quests_btn = QPushButton("Vybrat..."); select_quests_btn.clicked.connect(self.open_quest_selection_dialog)
@@ -144,7 +179,8 @@ class QuestEditor(QMainWindow):
 
         # --- TAB: START ---
         start_activation_types = ["", "talktoNPC", "distance", "useItem", "clientEvent", "prop"]
-        target_activation_types = ["", "talktoNPC", "distance", "useItem", "clientEvent", "prop","delivery","kill"]
+        # target_activation_types bude definován níže
+        
         tab_start = QWidget(); form_start = QFormLayout(tab_start)
         self.start_activation = QComboBox(); self.start_activation.addItems(start_activation_types)
         self.start_param = QLineEdit(); self.start_npc = QLineEdit(); self.start_coords = CoordsLineEdit()
@@ -152,6 +188,10 @@ class QuestEditor(QMainWindow):
         self.start_anim_dict = QLineEdit(); self.start_anim_name = QLineEdit()
         self.start_prompt = PromptWidget(); self.start_items = ItemsWidget(self.db, config.IMAGE_BASE_URL)
         self.start_events = EventsWidget()
+        
+        # Propojení změny typu aktivace s nápovědou parametru
+        self.start_activation.currentTextChanged.connect(lambda: self._update_param_hints(self.start_activation, self.start_param))
+
         form_start.addRow("Aktivace:", self.start_activation); form_start.addRow("Parametr:", self.start_param)
         form_start.addRow("Model:", self.start_npc); form_start.addRow("Souřadnice:", self.start_coords)
         form_start.addRow("Text:", self.start_text); form_start.addRow("Zvuk:", self.start_sound)
@@ -161,15 +201,20 @@ class QuestEditor(QMainWindow):
         self.tabs.addTab(tab_start, "Start")
 
         # --- TAB: CÍL ---
+        target_activation_types = ["", "talktoNPC", "distance", "useItem", "clientEvent", "prop", "delivery", "kill"]
+        
         tab_target = QWidget(); form_target = QFormLayout(tab_target)
         self.target_activation = QComboBox(); self.target_activation.addItems(target_activation_types)
-        # pokud je target activation delivery, přejmenuje "Předměty" na "Dodávka předmětů"
-
+        
         self.target_param = QLineEdit(); self.target_npc = QLineEdit(); self.target_blip = QLineEdit()
         self.target_coords = CoordsLineEdit(); self.target_text = QTextEdit(); self.target_sound = QLineEdit()
         self.target_anim_dict = QLineEdit(); self.target_anim_name = QLineEdit()
         self.target_prompt = PromptWidget(); self.target_items = ItemsWidget(self.db, config.IMAGE_BASE_URL)
         self.target_money = QSpinBox(); self.target_money.setRange(0, 1000000); self.target_events = EventsWidget()
+        
+        # Propojení změny typu aktivace s nápovědou parametru
+        self.target_activation.currentTextChanged.connect(lambda: self._update_param_hints(self.target_activation, self.target_param))
+
         form_target.addRow("Aktivace:", self.target_activation); form_target.addRow("Parametr:", self.target_param)
         form_target.addRow("Model:", self.target_npc); form_target.addRow("Blip:", self.target_blip)
         form_target.addRow("Souřadnice:", self.target_coords); form_target.addRow("Text:", self.target_text)
@@ -195,7 +240,15 @@ class QuestEditor(QMainWindow):
             elif isinstance(w, QComboBox): w.currentIndexChanged.connect(self._mark_as_dirty)
             elif isinstance(w, QSpinBox): w.valueChanged.connect(self._mark_as_dirty)
 
-    # ... (_set_dirty_tracking_enabled, _mark_as_dirty, _mark_as_clean, _check_unsaved_changes zůstávají stejné) ...
+    # --- NOVÁ METODA PRO AKTUALIZACI HINTŮ ---
+    def _update_param_hints(self, combo_box, line_edit):
+        """Aktualizuje placeholder a tooltip pro parametr na základě vybrané aktivace."""
+        activation_type = combo_box.currentText()
+        hint_data = self.param_hints.get(activation_type, self.param_hints[""])
+        
+        line_edit.setPlaceholderText(hint_data["placeholder"])
+        line_edit.setToolTip(hint_data["tooltip"])
+
     def _set_dirty_tracking_enabled(self, enabled: bool):
         widgets = getattr(self, "_dirty_widgets", [])
         for w in widgets: w.blockSignals(not enabled)
@@ -238,41 +291,23 @@ class QuestEditor(QMainWindow):
         self.quest_tree_window.show()
         self.quest_tree_window.activateWindow()
 
-    # --- LOGIKA SKUPIN ---
-
+    # --- LOGIKA SKUPIN (Beze změn) ---
     def create_group(self):
-        """Vytvoří novou skupinu. Dostupné kdykoliv."""
         text, ok = QInputDialog.getText(self, "Nová skupina", "Zadejte název nové skupiny:")
         if ok and text:
             success, result = self.db.add_group(text.strip())
             if success:
-                self.load_quests() # Přenačíst strom
-                # Aktualizovat ComboBox ve formuláři
+                self.load_quests()
                 self.quest_groups = self.db.get_quest_groups()
                 self._reload_group_combo()
             else:
                 QMessageBox.critical(self, "Chyba", f"Nepodařilo se vytvořit skupinu: {result}")
 
     def rename_group(self):
-        """Přejmenuje vybranou skupinu."""
         current_item = self.quest_tree.currentItem()
-        if not current_item or current_item.parent() is not None:
-            return # Není vybrána skupina
-            
-        # Získání ID skupiny z prvního potomka nebo mapy? 
-        # Ve funkci load_quests musíme uložit ID skupiny do TopLevelItem
-        # Momentálně v load_quests: grp_item.setData(0, Qt.ItemDataRole.UserRole, None) -> To je špatně pro identifikaci.
-        # Opravíme load_quests, aby ukládal ID skupiny jinam nebo použijeme UserRole s příznakem.
-        
-        # V load_quests níže jsem to upravil:
-        # UserRole = Quest ID (pro questy)
-        # UserRole + 100000 nebo jiná role = Group ID (pro skupiny)
-        # Jednodušší: UserRole = ID. Pokud item má childy nebo je TopLevel, je to skupina? Ne, quest může být bez childů.
-        # Řešení: Použijeme UserRole pro QuestID a UserRole+1 pro GroupID.
-        
+        if not current_item or current_item.parent() is not None: return
         group_id = current_item.data(0, Qt.ItemDataRole.UserRole + 1)
-        old_name = current_item.text(0).split(' (')[0] # Odstranění počtu
-        
+        old_name = current_item.text(0).split(' (')[0]
         text, ok = QInputDialog.getText(self, "Přejmenovat skupinu", "Nový název:", text=old_name)
         if ok and text:
             success, msg = self.db.rename_group(group_id, text.strip())
@@ -284,52 +319,33 @@ class QuestEditor(QMainWindow):
                 QMessageBox.critical(self, "Chyba", f"Nepodařilo se přejmenovat skupinu: {msg}")
 
     def delete_group(self):
-        """Smaže vybranou skupinu."""
         current_item = self.quest_tree.currentItem()
         if not current_item or current_item.parent() is not None: return
-
         group_id = current_item.data(0, Qt.ItemDataRole.UserRole + 1)
         group_name = current_item.text(0)
-        
-        if group_id == 1:
-            QMessageBox.warning(self, "Nelze smazat", "Výchozí skupinu nelze smazat.")
-            return
-
-        res = QMessageBox.question(self, "Smazat skupinu", 
-                                   f"Opravdu smazat skupinu '{group_name}'?\nQuesty v ní budou přesunuty do výchozí skupiny.",
-                                   QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if group_id == 1: QMessageBox.warning(self, "Nelze smazat", "Výchozí skupinu nelze smazat."); return
+        res = QMessageBox.question(self, "Smazat skupinu", f"Opravdu smazat skupinu '{group_name}'?\nQuesty v ní budou přesunuty do výchozí skupiny.", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if res == QMessageBox.StandardButton.Yes:
             success, msg = self.db.delete_group(group_id)
             if success:
-                self.load_quests()
-                self.quest_groups = self.db.get_quest_groups()
-                self._reload_group_combo()
+                self.load_quests(); self.quest_groups = self.db.get_quest_groups(); self._reload_group_combo()
             else:
                 QMessageBox.critical(self, "Chyba", f"Nepodařilo se smazat skupinu: {msg}")
 
     def _reload_group_combo(self):
-        """Pomocná metoda pro obnovení obsahu ComboBoxu ve formuláři."""
         current_data = self.group_combo.currentData()
         self.group_combo.clear()
-        for grp in self.quest_groups:
-            self.group_combo.addItem(grp['name'], grp['id'])
-        
-        # Obnovení výběru
+        for grp in self.quest_groups: self.group_combo.addItem(grp['name'], grp['id'])
         idx = self.group_combo.findData(current_data)
         if idx >= 0: self.group_combo.setCurrentIndex(idx)
         elif self.group_combo.count() > 0: self.group_combo.setCurrentIndex(0)
 
-
     def load_quests(self):
         current_id = self.current_quest_id
-        
-        # Uložení stavu expanze skupin
         expanded_groups = set()
         for i in range(self.quest_tree.topLevelItemCount()):
             item = self.quest_tree.topLevelItem(i)
             if item.isExpanded():
-                # Identifikujeme skupinu podle názvu (protože ID ještě nemáme uložené konzistentně v minulé verzi)
-                # V nové verzi použijeme ID
                 group_id = item.data(0, Qt.ItemDataRole.UserRole + 1)
                 if group_id: expanded_groups.add(group_id)
 
@@ -337,26 +353,19 @@ class QuestEditor(QMainWindow):
         self.quest_groups = self.db.get_quest_groups()
         group_items = {}
         
-        # 1. Vytvoření skupin
         for grp in self.quest_groups:
-            # Ukládám čistý název, počet přidám až na konci
             grp_item = QTreeWidgetItem([grp['name']])
-            grp_item.setData(0, Qt.ItemDataRole.UserRole, None) # Quest ID je None
-            grp_item.setData(0, Qt.ItemDataRole.UserRole + 1, grp['id']) # Group ID
-            
+            grp_item.setData(0, Qt.ItemDataRole.UserRole, None)
+            grp_item.setData(0, Qt.ItemDataRole.UserRole + 1, grp['id'])
             font = grp_item.font(0); font.setBold(True); grp_item.setFont(0, font)
-            
-            # Obnovení expanze
             if grp['id'] in expanded_groups: grp_item.setExpanded(True)
-            else: grp_item.setExpanded(True) # Defaultně rozbaleno
-            
+            else: grp_item.setExpanded(True)
             self.quest_tree.addTopLevelItem(grp_item)
             group_items[grp['id']] = grp_item
             
         unknown_group_item = None 
         item_to_select = None
         
-        # 2. Načtení questů
         quests = self.db.get_all_quests()
         for quest in quests:
             grp_id = quest.get('groupid')
@@ -366,7 +375,7 @@ class QuestEditor(QMainWindow):
                 if not unknown_group_item:
                     unknown_group_item = QTreeWidgetItem(["Nezařazeno"])
                     unknown_group_item.setData(0, Qt.ItemDataRole.UserRole, None)
-                    unknown_group_item.setData(0, Qt.ItemDataRole.UserRole + 1, 0) # Fake ID
+                    unknown_group_item.setData(0, Qt.ItemDataRole.UserRole + 1, 0)
                     unknown_group_item.setExpanded(True)
                     self.quest_tree.addTopLevelItem(unknown_group_item)
                 parent_item = unknown_group_item
@@ -374,11 +383,8 @@ class QuestEditor(QMainWindow):
             quest_item = QTreeWidgetItem([f"{quest['id']}: {quest['name']}"])
             quest_item.setData(0, Qt.ItemDataRole.UserRole, quest['id'])
             parent_item.addChild(quest_item)
-            
-            if quest['id'] == current_id:
-                item_to_select = quest_item
+            if quest['id'] == current_id: item_to_select = quest_item
         
-        # 3. Aktualizace názvů skupin s počty
         for grp_item in group_items.values():
             count = grp_item.childCount()
             grp_item.setText(0, f"{grp_item.text(0)} ({count})")
@@ -391,51 +397,29 @@ class QuestEditor(QMainWindow):
 
     def display_quest_details(self, current_item, previous_item):
         self._mark_as_clean()
-        
-        # Reset tlačítek skupin
-        self.rename_group_btn.setEnabled(False)
-        self.del_group_btn.setEnabled(False)
-        # Nová skupina je vždy povolena, ale tlačítko je statické
-        self.new_group_btn.setEnabled(True) 
+        self.rename_group_btn.setEnabled(False); self.del_group_btn.setEnabled(False); self.new_group_btn.setEnabled(True) 
 
-        # Detekce, co je vybráno
         if not current_item:
-            self.copy_quest_btn.setEnabled(False)
-            self.clear_form()
-            self.set_form_enabled(False)
-            return
+            self.copy_quest_btn.setEnabled(False); self.clear_form(); self.set_form_enabled(False); return
 
         quest_id = current_item.data(0, Qt.ItemDataRole.UserRole)
         group_id = current_item.data(0, Qt.ItemDataRole.UserRole + 1)
 
         if quest_id is None:
-            # --- VYBRÁNA SKUPINA ---
-            # Povolíme tlačítka pro úpravu skupiny
-            # (Pouze pokud to není "Nezařazeno" s fake ID 0, ale to v DB groups nebude)
-            if group_id and group_id > 0:
-                self.rename_group_btn.setEnabled(True)
-                self.del_group_btn.setEnabled(True)
-            
-            # Formulář questu vyčistíme a zakážeme
-            self.copy_quest_btn.setEnabled(False)
-            self.clear_form()
-            self.set_form_enabled(False)
+            if group_id and group_id > 0: self.rename_group_btn.setEnabled(True); self.del_group_btn.setEnabled(True)
+            self.copy_quest_btn.setEnabled(False); self.clear_form(); self.set_form_enabled(False)
             self.current_quest_title_label.setText(f"Skupina: {current_item.text(0)}")
             return
             
-        # --- VYBRÁN QUEST ---
         self.copy_quest_btn.setEnabled(True)
         self.current_quest_id = quest_id
         
         details = self.db.get_quest_details(self.current_quest_id)
         if details:
-            self.current_quest_title_label.setText(
-                f"Úprava: {details.get('name', '')} (ID: {self.current_quest_id})")
+            self.current_quest_title_label.setText(f"Úprava: {details.get('name', '')} (ID: {self.current_quest_id})")
             self.fill_form_with_data(details)
             self.set_form_enabled(True)
             self.delete_btn.setEnabled(True)
-
-    # ... fill_form_with_data, _safe_json_decode, _populate_json_field, clear_form, new_quest, open_quest_selection_dialog, copy_quest, get_data_from_form, save_quest, set_form_enabled beze změn ...
 
     def fill_form_with_data(self, data):
         self._set_dirty_tracking_enabled(False)
@@ -461,6 +445,9 @@ class QuestEditor(QMainWindow):
             else: self.complete_quests_display.setText("")
 
             self.start_activation.setCurrentText(data.get('start_activation', ''))
+            # Trigger update hints manually after setting text
+            self._update_param_hints(self.start_activation, self.start_param)
+
             self.start_param.setText(data.get('start_param', ''))
             self.start_npc.setText(data.get('start_npc', ''))
             self.start_coords.setText(data.get('start_coords', ''))
@@ -470,6 +457,9 @@ class QuestEditor(QMainWindow):
             self.start_anim_name.setText(data.get('start_anim_name', ''))
 
             self.target_activation.setCurrentText(data.get('target_activation', ''))
+            # Trigger update hints manually after setting text
+            self._update_param_hints(self.target_activation, self.target_param)
+
             self.target_param.setText(data.get('target_param', ''))
             self.target_npc.setText(data.get('target_npc', ''))
             self.target_blip.setText(data.get('target_blip', ''))
@@ -515,6 +505,11 @@ class QuestEditor(QMainWindow):
             self.hours_widget.setData(None) 
             self.active.setChecked(True); self.repeatable.setChecked(False)
             self.target_money.setValue(0); self.start_activation.setCurrentIndex(0); self.target_activation.setCurrentIndex(0)
+            
+            # Reset hintů
+            self._update_param_hints(self.start_activation, self.start_param)
+            self._update_param_hints(self.target_activation, self.target_param)
+            
             self.current_quest_id = None
         finally:
             self._set_dirty_tracking_enabled(True)
