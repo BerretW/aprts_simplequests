@@ -348,7 +348,7 @@ class QuestEditor(QMainWindow):
             self.target_money.setValue(data.get('target_money', 0))
 
             self._populate_json_field(self.jobs, data.get('jobs'))
-            self._populate_json_field(self.blacklistJobs, data.get('blacklistJobs'))
+            self._populate_json_field(self.blacklistJobs, data.get('bljobs'))
 
             self.start_prompt.setData(self._safe_json_decode(data.get('start_prompt')))
             self.target_prompt.setData(self._safe_json_decode(data.get('target_prompt')))
