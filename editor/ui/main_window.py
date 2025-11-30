@@ -21,7 +21,7 @@ class QuestEditor(QMainWindow):
         super().__init__()
         self.db = db_handler
         self.current_quest_id = None
-        self.setWindowTitle("RedM Quest Editor V1.3")
+        self.setWindowTitle("APRTS SimpleQuest Editor V1.3")
         self.setGeometry(100, 100, 1200, 800)
 
         self._is_dirty = False
@@ -109,6 +109,9 @@ class QuestEditor(QMainWindow):
         self.jobs = QTextEdit()
         self.jobs.setToolTip(
             "Zadejte jako JSON pole objektů, např.:\n[{\"job\": \"police\", \"grade\": 1}]")
+        self.blacklistJobs = QTextEdit()
+        self.blacklistJobs.setToolTip(
+            "Zadejte jako JSON pole jobů které tento quest vzít nemůžou, např.:\n[{\"job\": \"police\", \"grade\": 1}]")
         self.complete_quests_display = QLineEdit()
         self.complete_quests_display.setReadOnly(True)
         select_quests_btn = QPushButton("Vybrat...")
@@ -122,15 +125,18 @@ class QuestEditor(QMainWindow):
         form_general.addRow("Aktivní:", self.active)
         form_general.addRow("Opakovatelný:", self.repeatable)
         form_general.addRow("Požadované práce (JSON):", self.jobs)
+        form_general.addRow("Zakázané práce (JSON):", self.blacklistJobs)
         form_general.addRow("Vyžaduje splněné questy:",
                             completed_quests_layout)
         self.tabs.addTab(tab_general, "Obecné")
-        activation_types = ["", "talktoNPC",
-                            "distance", "useItem", "clientEvent"]
+        start_activation_types = ["", "talktoNPC",
+                            "distance", "useItem", "clientEvent","prop"]
+        target_activation_types = ["", "talktoNPC",
+                            "distance", "useItem", "clientEvent", "prop"]
         tab_start = QWidget()
         form_start = QFormLayout(tab_start)
         self.start_activation = QComboBox()
-        self.start_activation.addItems(activation_types)
+        self.start_activation.addItems(start_activation_types)
         self.start_param = QLineEdit()
         self.start_npc = QLineEdit()
         self.start_coords = CoordsLineEdit()
@@ -156,7 +162,7 @@ class QuestEditor(QMainWindow):
         tab_target = QWidget()
         form_target = QFormLayout(tab_target)
         self.target_activation = QComboBox()
-        self.target_activation.addItems(activation_types)
+        self.target_activation.addItems(target_activation_types)
         self.target_param = QLineEdit()
         self.target_npc = QLineEdit()
         self.target_blip = QLineEdit()
@@ -342,6 +348,7 @@ class QuestEditor(QMainWindow):
             self.target_money.setValue(data.get('target_money', 0))
 
             self._populate_json_field(self.jobs, data.get('jobs'))
+            self._populate_json_field(self.blacklistJobs, data.get('blacklistJobs'))
 
             self.start_prompt.setData(self._safe_json_decode(data.get('start_prompt')))
             self.target_prompt.setData(self._safe_json_decode(data.get('target_prompt')))
@@ -485,6 +492,13 @@ class QuestEditor(QMainWindow):
         except json.JSONDecodeError as e:
             QMessageBox.warning(self, "Chyba ve formátu",
                                 f"Pole 'jobs' neobsahuje validní JSON.\n{e}")
+            return None
+        try:
+            data['bljobs'] = json.dumps(json.loads(self.blacklistJobs.toPlainText().strip(
+            )), ensure_ascii=False) if self.blacklistJobs.toPlainText().strip() else None
+        except json.JSONDecodeError as e:
+            QMessageBox.warning(self, "Chyba ve formátu",
+                                f"Pole 'blacklistJobs' neobsahuje validní JSON.\n{e}")
             return None
         completed_text = self.complete_quests_display.text().strip()
         if completed_text:

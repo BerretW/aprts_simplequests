@@ -13,7 +13,9 @@ Config.QuestData = {
         name = "Doručovací úkol",
         description = "Doruč balíček na určené místo.",
         jobs = nil,
+        blJobs = nil,
         repeatable = false,
+        hoursOpen = {0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23},
         start = {
             activation = "talktoNPC", -- talktoNPC, distance(distance), useItem(itemname), clientEvent(eventname)
             param = nil,
@@ -38,7 +40,7 @@ Config.QuestData = {
             }
         },
         target = {
-            activation = "talktoNPC", -- talktoNPC,distance(distance), useItem(itemname), killNPC(model), clientEvent(eventname)
+            activation = "talktoNPC", -- talktoNPC,distance(distance), useItem(itemname), killNPC(model), clientEvent(eventname), prop(model)
             param = "food_muschgulas",
             NPC = "a_m_m_middlesdtownfolk_01",
             blip = "blip_bag_capture",

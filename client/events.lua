@@ -2,6 +2,7 @@ AddEventHandler("onClientResourceStart", function(resourceName)
     if GetCurrentResourceName() ~= resourceName then
         return
     end
+    waitForCharacter()
     TriggerServerEvent("aprts_simplequests:server:requestQuests")
 
 end)

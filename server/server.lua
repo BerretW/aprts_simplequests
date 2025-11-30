@@ -42,7 +42,7 @@ function debugPrint(msg)
     end
 end
 function notify(playerId, message)
-    TriggerClientEvent('notifications:notify', playerId, "Questy", message, 7000)
+    TriggerClientEvent('notifications:notify', playerId, "Questy", message, 15000)
 end
 
 function table.count(tbl)

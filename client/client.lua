@@ -11,10 +11,9 @@ function debugPrint(msg)
 end
 
 function notify(text)
-    TriggerEvent('notifications:notify', "Questy", text, 6000)
+    TriggerEvent('notifications:notify', "Questy", text, 15000)
 end
-
-local function waitForCharacter()
+function waitForCharacter()
     while not LocalPlayer do
         Citizen.Wait(100)
     end
