@@ -55,6 +55,90 @@ function hasJob(jobtable)
     return false
 end
 
+function isOpen(timesTable)
+    local currentTime = GetClockHours()
+    for _, time in pairs(timesTable) do
+        if currentTime == time then
+            return true
+        end
+    end
+    return false
+end
+function clamp(v, lo, hi)
+    return math.max(lo, math.min(hi, v))
+end
+
+function string.split(str, sep)
+    if sep == nil or sep == "" then
+        return {str}
+    end
+
+    local result = {}
+    local pattern = string.format("([^%s]+)", sep)
+
+    for part in string.gmatch(str, pattern) do
+        table.insert(result, part)
+    end
+
+    return result
+end
+
+function GetQuestState(quest)
+    local charID = LocalPlayer.state.Character.CharId
+    return GetResourceKvpInt("aprts_simplequests:" .. quest .. ":" .. charID)
+end
+
+function SetQuestState(quest, value)
+    value = clamp(value, 0, 100)
+    local charID = LocalPlayer.state.Character.CharId
+    SetResourceKvpInt("aprts_simplequests:" .. quest .. ":" .. charID, value)
+end
+
+local function parseItemsFromString(itemString) -- "branch,5;wood,1" => {{name="branch",count=5},{name="wood",count=1}}
+    local items = {}
+    local itemPairs = string.split(itemString, ";")
+    for _, pair in pairs(itemPairs) do
+        local itemData = string.split(pair, ",")
+        if #itemData == 2 then
+            table.insert(items, {
+                name = itemData[1],
+                count = tonumber(itemData[2])
+            })
+        end
+    end
+    return items
+end
+
+
+local function parseParamForKill(param) -- "a_c_pronghorn_01,3,1,30" => {model="a_c_pronghorn_01",count=3,spawn=true,range=30}
+    local data = string.split(param, ",")
+    local param = {
+        model = data[1],
+        count = tonumber(data[2]),
+        spawn = data[3] == "1",
+        range = tonumber(data[4]) or 30
+    }
+    return param
+end
+
+local function OpenIn(timestable) -- return closest opening hour
+    local currentTime = GetClockHours()
+    local closest = nil
+    for _, time in pairs(timestable) do
+        if time > currentTime then
+            if not closest then
+                closest = time
+            elseif time < closest then
+                closest = time
+            end
+        end
+    end
+    if not closest then
+        closest = timestable[1] + 24
+    end
+    return closest - currentTime
+end
+
 function playAnim(entity, dict, name, flag, time, sound)
     if sound then
         -- print("Playing sound: " .. sound)
@@ -132,8 +216,46 @@ function giveItems(items)
     end
 end
 
+function hasItems(questID, remove)
+    local quest = Config.Quests[questID]
+    local inventory = exports.vorp_inventory:getInventoryItems()
+    print(json.encode(inventory, {
+        indent = true
+    }))
+    local items = parseItemsFromString(quest.target.param)
+    local hasAllItems = true
+    for _, reqItem in pairs(items) do
+        local found = false
+        for _, invItem in pairs(inventory) do
+            if invItem.name == reqItem.name and invItem.count >= reqItem.count then
+                reqItem.label = invItem.label or invItem.name
+                found = true
+                break
+            end
+        end
+        if not found then
+            hasAllItems = false
+            break
+        end
+    end
+    if not hasAllItems then
+        notify("Nemáš všechny potřebné předměty pro dokončení úkolu.")
+        return false
+    end
+    if remove then
+        TriggerServerEvent("aprts_simplequests:server:removeItems", items)
+    end
+    return true
+end
+
 function finishQuest(questID)
     local quest = Config.Quests[questID]
+    if quest.target.activation == "delivery" or quest.target.activation == "prop" then
+        if not hasItems(questID, true) then
+            notify("Nemáš všechny potřebné předměty pro dokončení úkolu.")
+            return
+        end
+    end
     notify(quest.target.text)
     giveItems(quest.target.items)
     TriggerServerEvent("aprts_simplequests:server:giveMoney", quest.target.money)
@@ -160,6 +282,9 @@ function finishQuest(questID)
         playAnim(quest.target.obj, quest.target.animDict, quest.target.animName, 0, -1, quest.target.sound)
     end
     TriggerServerEvent("aprts_simplequests:server:finishQuest", questID)
+    SetQuestState(questID, 100)
+    debugPrint("Finished quest: " .. quest.name .. " (ID: " .. questID .. ")")
+
 end
 
 function reqCheck(questID)
@@ -172,7 +297,9 @@ function reqCheck(questID)
         return true
     end
     local completed = false
+    -- print(json.encode(quest.complete_quests, {indent = true}))
     for _, reqQuestID in pairs(quest.complete_quests) do
+
         if Config.Quests[reqQuestID] then
             if Config.Quests[reqQuestID].active == false then
                 completed = true
@@ -187,13 +314,24 @@ function reqCheck(questID)
     return completed
 end
 
+function ActivateQuest(questID)
+    ActiveQuestID = questID
+    local quest = Config.Quests[questID]
+    if quest.target.coords and quest.target.blip then
+        createRoute(quest.target.coords)
+        TargetBlip = CreateBlip(quest.target.coords, quest.target.blip or "blip_mission", quest.name)
+        SetBlipStyle(TargetBlip, "BLIP_STYLE_BOUNTY_TARGET")
+        --
+    end
+end
+
 function startQuest(questID)
     local quest = Config.Quests[questID]
     if not quest.active or ActiveQuestID ~= 0 then
         print("Tento úkol není aktivní nebo je aktivní jiný.")
         return
     end
-    ActiveQuestID = questID
+
     giveItems(quest.start.items)
     notify(quest.start.text)
     if quest.start.events and quest.start.events.client then
@@ -208,12 +346,7 @@ function startQuest(questID)
             TriggerServerEvent(event.name, event.args[1], event.args[2], event.args[3], event.args[4], event.args[5])
         end
     end
-    if quest.target.coords and quest.target.blip then
-        createRoute(quest.target.coords)
-        TargetBlip = CreateBlip(quest.target.coords, quest.target.blip or "blip_mission", quest.name)
-        SetBlipStyle(TargetBlip, "BLIP_STYLE_BOUNTY_TARGET")
-        --
-    end
+    ActivateQuest(questID)
     if DoesEntityExist(quest.start.obj) then
         -- print("Playing start animation")
         -- print("Starting quest animation for quest ID: " .. questID)
@@ -221,6 +354,8 @@ function startQuest(questID)
         -- print(quest.start.obj, quest.start.animDict, quest.start.animName)
         playAnim(quest.start.obj, quest.start.animDict, quest.start.animName, 0, -1, quest.start.sound)
     end
+    SetQuestState(questID, 1)
+    debugPrint("Started quest: " .. quest.name .. " (ID: " .. questID .. ")")
 end
 
 Citizen.CreateThread(function()
@@ -229,25 +364,41 @@ Citizen.CreateThread(function()
         local pause = 1000
         local playerPed = PlayerPedId()
         local pcoords = GetEntityCoords(playerPed)
+
         if ActiveQuestID == 0 then
             for _, quest in pairs(Config.Quests) do
                 if reqCheck(quest.id) then
-                    -- print("Checking quest: " .. quest.name .. " (ID: " .. quest.id .. ")" .. " Active: " .. tostring(quest.active))
-                    if (quest.start.activation == "talktoNPC" or quest.start.activation == "distance") and quest.active and
-                        hasJob(quest.start.jobs) then
+
+                    if (quest.start.activation == "talktoNPC" or quest.start.activation == "distance" or
+                        quest.start.activation == "prop") and quest.active and hasJob(quest.start.jobs) then
                         local dist = #(pcoords -
                                          vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
-                        if quest.start.activation == "talktoNPC" then
-                            if dist < 1.2 then
+                        if quest.start.activation == "talktoNPC" or quest.start.activation == "prop" then
+                            local mesure = 1.2
+                            if quest.start.activation == "prop" then
+                                mesure = 2.0
+                            end
+                            if dist < mesure and GetQuestState(quest.id) == 0 then
                                 pause = 0
                                 PromptSetActiveGroupThisFrame(promptGroup, CreateVarString(10, 'LITERAL_STRING',
                                     quest.start.prompt.groupText))
-                                PromptSetText(Prompt, CreateVarString(10, 'LITERAL_STRING', quest.start.prompt.text))
-                                if PromptHasHoldModeCompleted(Prompt) then
-                                    startQuest(quest.id)
-                                    Wait(500)
+
+                                if isOpen(quest.hoursOpen) then
+                                    PromptSetEnabled(Prompt, true)
+                                    PromptSetText(Prompt, CreateVarString(10, 'LITERAL_STRING', quest.start.prompt.text))
+                                    if PromptHasHoldModeCompleted(Prompt) then
+                                        startQuest(quest.id)
+                                        Wait(500)
+
+                                    end
+                                else
+                                    local openin = OpenIn(quest.hoursOpen)
+                                    PromptSetText(Prompt,
+                                        CreateVarString(10, 'LITERAL_STRING', "Budu dostupný v " .. openin))
+                                    PromptSetEnabled(Prompt, false)
                                 end
                                 break
+
                             end
                         elseif quest.start.activation == "distance" then
                             if dist < tonumber(quest.start.param) then
@@ -264,19 +415,27 @@ Citizen.CreateThread(function()
 end)
 
 Citizen.CreateThread(function()
-
     while true do
         local pause = 1000
         local playerPed = PlayerPedId()
         local pcoords = GetEntityCoords(playerPed)
         if ActiveQuestID ~= 0 then
             local quest = Config.Quests[ActiveQuestID]
-
-            if (quest.target.activation == "talktoNPC" or quest.target.activation == "distance") and quest.active then
+            -- print("Checking quest: " .. quest.name .. " (ID: " .. quest.id .. ")" .. " Active: " ..
+            --           tostring(quest.active))
+            if (quest.target.activation == "talktoNPC" or quest.target.activation == "distance" or
+                quest.target.activation == "prop" or quest.target.activation == "delivery" or quest.target.activation == "kill") and quest.active then
                 local dist = #(pcoords - vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z))
-                -- print(dist)
-                if quest.target.activation == "talktoNPC" then
-                    if dist < 1.2 then
+
+                if quest.target.activation == "talktoNPC" or quest.target.activation == "prop" or
+                    quest.target.activation == "delivery" then
+                    local mesure = 1.2
+                    if quest.target.activation == "prop" then
+                        mesure = 2.0
+                    end
+                    -- print(dist, mesure)
+                    if dist < mesure then
+                        -- print(dist, "<", mesure)
                         pause = 0
                         PromptSetActiveGroupThisFrame(promptGroup, CreateVarString(10, 'LITERAL_STRING',
                             quest.target.prompt.groupText))
@@ -291,6 +450,40 @@ Citizen.CreateThread(function()
                     if dist < quest.target.param then
                         finishQuest(quest.id)
                     end
+                elseif quest.target.activation == "kill" then
+                    local param = parseParamForKill(quest.target.param)
+                    if not quest.target.killedCount then
+                        quest.target.killedCount = 0
+                        quest.target.killCount = param.count
+                    end
+                    if dist < param.range + 30.0 then
+                        if not quest.target.killEntities then
+                            quest.target.killEntities = {}
+                            quest.target.killBlips = {}
+                            for i = 1, param.count do
+                                local spawnCoords = vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z) + vector3(
+                                    math.random(-param.range, param.range),
+                                    math.random(-param.range, param.range),
+                                    0)
+                                local ped = SpawnPed(param.model, spawnCoords)
+                                print("Spawned kill target: " .. param.model .. " | " .. ped .. " at " .. json.encode(spawnCoords))
+                                table.insert(quest.target.killBlips, Citizen.InvokeNative(0x23f74c2fda6e7c61, -1230993421, ped))
+                                table.insert(quest.target.killEntities, ped)
+                            end
+                        else
+                            for _, ped in pairs(quest.target.killEntities) do
+                                if DoesEntityExist(ped) and IsEntityDead(ped) then
+                                    quest.target.killedCount = quest.target.killedCount + 1
+                                    print("Killed " .. quest.target.killedCount .. " / " .. quest.target.killCount)
+                                    
+                                end
+                            end
+                            if quest.target.killedCount >= quest.target.killCount then
+                                finishQuest(quest.id)
+                            end
+                        end
+                    end
+                    
                 end
             end
 

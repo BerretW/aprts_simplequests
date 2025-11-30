@@ -15,6 +15,12 @@ AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
         Config.Quests[quest.id] = quest
     end
     for _, quest in pairs(Config.Quests) do
+        if GetQuestState(quest.id) == 100 then
+            quest.active = false
+        end
+         if GetQuestState(quest.id) == 1 then
+            ActivateQuest(quest.id)
+        end
         if quest.start.activation == "clientEvent" and quest.active and reqCheck(quest.id) then
             debugPrint("Registering client event for quest start: " .. quest.start.param)
             AddEventHandler(quest.start.param, function()
@@ -34,6 +40,7 @@ AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
             end)
         end
     end
+    
 end)
 
 AddEventHandler("onResourceStop", function(resourceName)
@@ -52,6 +59,12 @@ AddEventHandler("onResourceStop", function(resourceName)
         if quest.start.blipOBJ then
             RemoveBlip(quest.start.blipOBJ)
             quest.start.blipOBJ = nil
+        end
+        if quest.target.killBlips then
+            for _, blip in pairs(quest.target.killBlips) do
+                RemoveBlip(blip)
+            end
+            quest.target.killBlips = nil
         end
     end
     if TargetBlip then

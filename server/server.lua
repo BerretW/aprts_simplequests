@@ -190,7 +190,9 @@ function LoadQuests()
                     active = quest.active,
                     name = quest.name,
                     description = quest.description,
+                    hoursOpen = safeJsonDecode(quest.hoursOpen, quest.id, 'hoursOpen') or {},
                     jobs = safeJsonDecode(quest.jobs, quest.id, 'jobs'),
+                    bljobs = safeJsonDecode(quest.bljobs, quest.id, 'bljobs') or {},
                     repeatable = quest.repeatable,
                     complete_quests = safeJsonDecode(quest.complete_quests, quest.id, 'complete_quests') or {},
                     start = {
@@ -204,7 +206,7 @@ function LoadQuests()
                         sound = quest.start_sound or nil,
                         text = quest.start_text,
                         prompt = safeJsonDecode(quest.start_prompt, quest.id, 'start_prompt'),
-                        items = safeJsonDecode(quest.start_items, quest.id, 'start_items') or {}, -- Pokud je nil, použije se prázdná tabulka
+                        items = safeJsonDecode(quest.start_items, quest.id, 'start_items') or {},
                         events = safeJsonDecode(quest.start_events, quest.id, 'start_events') or { server = {}, client = {} },
                     },
                     target = {

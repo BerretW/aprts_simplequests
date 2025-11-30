@@ -5,7 +5,21 @@ local function LoadModel(model)
         RequestModel(model)
         Citizen.Wait(10)
     end
+    return model
 end
+function SpawnPed(model, coords)
+    debugPrint('Spawning ped: ' .. model .. ' at coords: ' .. coords.x .. ', ' .. coords.y .. ', ' .. coords.z)
+    model = LoadModel(model)
+    
+    local ped = CreatePed(model, coords.x, coords.y, coords.z, false, true, true)
+    Citizen.InvokeNative(0x283978A15512B2FE, ped, true)
+
+    PlaceEntityOnGroundProperly(ped)
+    SetModelAsNoLongerNeeded(model)
+    
+    return ped
+end
+
 
 local function spawnNPC(model, x, y, z)
     local modelHash = LoadModel(model)
@@ -40,8 +54,8 @@ Citizen.CreateThread(function()
             if reqCheck(quest.id) then
                 if not quest.active then
                     if DoesEntityExist(quest.start.obj) then
-                        DeleteEntity(quest.start.obj)
-                        quest.start.obj = nil
+                        -- DeleteEntity(quest.start.obj)
+                        -- quest.start.obj = nil
                     end
                     if DoesEntityExist(quest.target.obj) then
                         DeleteEntity(quest.target.obj)
@@ -50,10 +64,18 @@ Citizen.CreateThread(function()
                 else
                     if quest.start.coords and quest.start.NPC then
                         dist = #(playerPos - vector3(quest.start.coords.x, quest.start.coords.y, quest.start.coords.z))
-                        if dist < 30.0 and quest.id ~= ActiveQuestID then
+                        if dist < 30.0 and GetQuestState(quest.id) ~= 100 then
                             if not DoesEntityExist(quest.start.obj) then
-                                quest.start.obj = spawnNPC(quest.start.NPC, quest.start.coords.x, quest.start.coords.y,
-                                    quest.start.coords.z)
+                                if quest.start.activation == "prop" then
+                                    -- spawn prop instead of NPC
+                                    quest.start.obj = CreateObject(GetHashKey(quest.start.NPC), quest.start.coords.x,
+                                        quest.start.coords.y, quest.start.coords.z, false, false, false, false, false)
+
+                                else
+                                    quest.start.obj = spawnNPC(quest.start.NPC, quest.start.coords.x,
+                                        quest.start.coords.y, quest.start.coords.z)
+
+                                end
                                 SetEntityHeading(quest.start.obj, quest.start.coords.w)
                             end
                         else
@@ -68,8 +90,16 @@ Citizen.CreateThread(function()
                                    vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z))
                         if dist < 30.0 then
                             if not DoesEntityExist(quest.target.obj) then
-                                quest.target.obj = spawnNPC(quest.target.NPC, quest.target.coords.x,
-                                    quest.target.coords.y, quest.target.coords.z)
+
+                                if quest.target.activation == "prop" then
+                                    -- spawn prop instead of NPC
+                                    quest.target.obj = CreateObject(GetHashKey(quest.target.NPC), quest.target.coords.x,
+                                        quest.target.coords.y, quest.target.coords.z, false, false, false, false, false)
+
+                                elseif quest.target.activation ~= "kill" then
+                                    quest.target.obj = spawnNPC(quest.target.NPC, quest.target.coords.x,
+                                        quest.target.coords.y, quest.target.coords.z)
+                                end
                                 SetEntityHeading(quest.target.obj, quest.target.coords.w)
                             end
                         else

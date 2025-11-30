@@ -144,7 +144,7 @@ class QuestEditor(QMainWindow):
 
         # --- TAB: START ---
         start_activation_types = ["", "talktoNPC", "distance", "useItem", "clientEvent", "prop"]
-        target_activation_types = ["", "talktoNPC", "distance", "useItem", "clientEvent", "prop","delivery"]
+        target_activation_types = ["", "talktoNPC", "distance", "useItem", "clientEvent", "prop","delivery","kill"]
         tab_start = QWidget(); form_start = QFormLayout(tab_start)
         self.start_activation = QComboBox(); self.start_activation.addItems(start_activation_types)
         self.start_param = QLineEdit(); self.start_npc = QLineEdit(); self.start_coords = CoordsLineEdit()

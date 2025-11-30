@@ -12,6 +12,7 @@ AddEventHandler("aprts_simplequests:server:requestQuests", function()
     if player == nil then
         return
     end
+
     local CharID = player.state.Character.CharId
 
     debugPrint("aprts_simplequests:server:requestQuests called by player " .. _source)
@@ -28,9 +29,6 @@ AddEventHandler("aprts_simplequests:server:requestQuests", function()
     end
     TriggerClientEvent("aprts_simplequests:client:recieveQuests", _source, playerQuests)
 end)
-
-
-
 
 RegisterServerEvent("vorp_inventory:useItem")
 AddEventHandler("vorp_inventory:useItem", function(data)
@@ -77,10 +75,8 @@ AddEventHandler("aprts_simplequests:server:finishQuest", function(questID)
             ['@questid'] = questID
         })
     end
-    
 
 end)
-
 
 RegisterServerEvent("aprts_simplequests:server:giveItems")
 AddEventHandler("aprts_simplequests:server:giveItems", function(items)
@@ -89,6 +85,18 @@ AddEventHandler("aprts_simplequests:server:giveItems", function(items)
         -- TriggerEvent('inventory:addItem', _source, item.name, item.count)
         exports.vorp_inventory:addItem(_source, item.name, item.count, item.meta or {})
         notify(_source, "Giving item: " .. item.name .. " x" .. item.count)
+    end
+end)
+
+RegisterServerEvent("aprts_simplequests:server:removeItems")
+AddEventHandler("aprts_simplequests:server:removeItems", function(items)
+    local _source = source
+    for _, item in pairs(items) do
+        if exports.vorp_inventory:subItem(_source, item.name, item.count) then
+            notify(_source, "Removing item: " .. item.label .. " x" .. item.count)
+        else
+            notify(_source, "Failed to remove item: " .. item.label .. " x" .. item.count)
+        end
     end
 end)
 
