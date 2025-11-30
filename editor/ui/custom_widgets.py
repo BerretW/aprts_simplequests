@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QTableWidget, QTableWidgetItem, QPushButton, QSpinBox,
     QLabel, QHeaderView, QMessageBox, QDialog, QDialogButtonBox,
-    QFormLayout, QComboBox, QListWidget, QListWidgetItem, QAbstractItemView
+    QFormLayout, QComboBox, QListWidget, QListWidgetItem, QAbstractItemView,QTreeWidget
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap
@@ -31,6 +31,34 @@ class SafeListWidget(QListWidget):
         # Pokud je vše v pořádku, pokračujeme v normálním chování.
         super().mousePressEvent(event)
 
+class SafeTreeWidget(QTreeWidget):
+    """
+    QTreeWidget, který před změnou výběru zkontroluje neuložené změny
+    v hlavním okně.
+    """
+    def __init__(self, main_window, parent=None):
+        super().__init__(parent)
+        self.main_window = main_window
+        self.setHeaderHidden(True) # Skryjeme hlavičku (sloupce)
+
+    def mousePressEvent(self, event):
+        # Získáme položku pod myší
+        item = self.itemAt(event.position().toPoint())
+        
+        # Pokud klikáme do prázdna nebo na stejnou položku, chováme se standardně
+        if not item:
+            super().mousePressEvent(event)
+            return
+
+        # Pokud se pokoušíme změnit výběr na jinou položku
+        if item != self.currentItem():
+            # Zkontrolujeme neuložené změny
+            if not self.main_window._check_unsaved_changes():
+                # Uživatel dal "Cancel", ignorujeme kliknutí
+                return
+        
+        # Vše ok, provedeme standardní akci
+        super().mousePressEvent(event)
 
 # --- Worker pro asynchronní načítání obrázků (beze změny) ---
 class ImageLoader(QObject):
@@ -596,3 +624,122 @@ class QuestSelectionDialog(QDialog):
         for item in self.quest_list.selectedItems():
             selected_ids.append(item.data(Qt.ItemDataRole.UserRole))
         return sorted(selected_ids)
+
+
+class HoursSelectionDialog(QDialog):
+    """Dialog pro výběr hodin (0-23)."""
+    def __init__(self, selected_hours=None, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Vybrat otevírací hodiny")
+        self.setModal(True)
+        self.selected_hours = selected_hours if selected_hours is not None else list(range(24))
+        
+        layout = QVBoxLayout(self)
+        
+        # Grid pro checkboxy 0-23
+        from PyQt6.QtWidgets import QGridLayout, QCheckBox
+        grid = QGridLayout()
+        self.checkboxes = []
+        
+        for hour in range(24):
+            cb = QCheckBox(f"{hour:02d}:00")
+            if hour in self.selected_hours:
+                cb.setChecked(True)
+            self.checkboxes.append(cb)
+            # Rozložení: 4 řádky po 6 sloupcích
+            row = hour // 6
+            col = hour % 6
+            grid.addWidget(cb, row, col)
+            
+        layout.addLayout(grid)
+        
+        # Rychlé volby
+        quick_layout = QHBoxLayout()
+        btn_all = QPushButton("Vše (0-23)")
+        btn_all.clicked.connect(lambda: self.set_all(True))
+        btn_none = QPushButton("Nic")
+        btn_none.clicked.connect(lambda: self.set_all(False))
+        btn_day = QPushButton("Den (6-22)")
+        btn_day.clicked.connect(self.set_day)
+        
+        quick_layout.addWidget(btn_all)
+        quick_layout.addWidget(btn_none)
+        quick_layout.addWidget(btn_day)
+        layout.addLayout(quick_layout)
+        
+        # Dialog tlačítka
+        btns = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        btns.accepted.connect(self.accept)
+        btns.rejected.connect(self.reject)
+        layout.addWidget(btns)
+
+    def set_all(self, state):
+        for cb in self.checkboxes:
+            cb.setChecked(state)
+
+    def set_day(self):
+        for i, cb in enumerate(self.checkboxes):
+            # 6:00 až 21:59 (tedy hodiny 6..21, 22 už je "po") nebo 22 včetně? 
+            # Obvykle Day je 6-22
+            is_day = 6 <= i < 22
+            cb.setChecked(is_day)
+
+    def get_hours(self):
+        hours = []
+        for i, cb in enumerate(self.checkboxes):
+            if cb.isChecked():
+                hours.append(i)
+        return hours
+
+class HoursWidget(QWidget):
+    """Widget pro zobrazení a editaci hodin v hlavním okně."""
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.hours = list(range(24)) # Defaultně vše
+        
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0,0,0,0)
+        
+        self.display = QLineEdit()
+        self.display.setReadOnly(True)
+        self.update_display()
+        
+        btn = QPushButton("Upravit...")
+        btn.clicked.connect(self.open_dialog)
+        
+        layout.addWidget(self.display)
+        layout.addWidget(btn)
+        
+    def open_dialog(self):
+        dlg = HoursSelectionDialog(self.hours, self)
+        if dlg.exec():
+            self.hours = dlg.get_hours()
+            self.update_display()
+            # Emit changes for dirty tracker? 
+            # QLineEdit change triggers dirty manually in main_window via display text change
+            
+    def update_display(self):
+        if len(self.hours) == 24:
+            self.display.setText("Nonstop (0-23)")
+        elif len(self.hours) == 0:
+            self.display.setText("Zavřeno")
+        else:
+            # Zjednodušený výpis
+            self.display.setText(f"{len(self.hours)} hodin aktivní ({self.hours})")
+
+    def setData(self, data):
+        """Očekává seznam intů nebo JSON string."""
+        if isinstance(data, str):
+            try:
+                data = json.loads(data)
+            except:
+                data = []
+        
+        if isinstance(data, list):
+            self.hours = [int(h) for h in data]
+        else:
+            self.hours = list(range(24))
+        self.update_display()
+
+    def getData(self):
+        return self.hours

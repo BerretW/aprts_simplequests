@@ -151,6 +151,33 @@ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
     width: 0px;
 }
 
+/* Strom questů (QTreeWidget) */
+QTreeWidget {
+    background-color: #34495e;
+    border: 1px solid #566573;
+    border-radius: 4px;
+    color: #ecf0f1;
+}
+QTreeWidget::item {
+    padding: 6px;
+    border-bottom: 1px solid #42566a; /* Jemná linka mezi položkami */
+}
+QTreeWidget::item:selected {
+    background-color: #3498db;
+    color: white;
+}
+QTreeWidget::item:hover {
+    background-color: #4e6a85;
+}
+/* Šipka pro rozbalení */
+QTreeWidget::branch:has-children:!has-siblings:closed,
+QTreeWidget::branch:closed:has-children:has-siblings {
+    image: url(none); /* Zde byste mohli dát vlastní ikonku šipky, nebo nechat default */
+}
+QTreeWidget::branch:open:has-children:!has-siblings,
+QTreeWidget::branch:open:has-children:has-siblings {
+    image: url(none);
+}
 
 /* Splitter */
 QSplitter::handle {
