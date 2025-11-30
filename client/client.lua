@@ -112,7 +112,6 @@ local function parseItemsFromString(itemString) -- "branch,5;wood,1" => {{name="
     return items
 end
 
-
 local function parseParamForKill(param) -- "a_c_pronghorn_01,3,1,30" => {model="a_c_pronghorn_01",count=3,spawn=true,range=30}
     local data = string.split(param, ",")
     local param = {
@@ -253,7 +252,8 @@ end
 
 function finishQuest(questID)
     local quest = Config.Quests[questID]
-    if quest.target.activation == "delivery" or quest.target.activation == "prop" or quest.target.activation == "talktoNPC" then
+    if quest.target.activation == "delivery" or quest.target.activation == "prop" or quest.target.activation ==
+        "talktoNPC" then
         if not hasItems(questID, true) then
             notify("Nemáš všechny potřebné předměty pro dokončení úkolu.")
             return
@@ -427,7 +427,8 @@ Citizen.CreateThread(function()
             -- print("Checking quest: " .. quest.name .. " (ID: " .. quest.id .. ")" .. " Active: " ..
             --           tostring(quest.active))
             if (quest.target.activation == "talktoNPC" or quest.target.activation == "distance" or
-                quest.target.activation == "prop" or quest.target.activation == "delivery" or quest.target.activation == "kill") and quest.active then
+                quest.target.activation == "prop" or quest.target.activation == "delivery" or quest.target.activation ==
+                "kill") and quest.active then
                 local dist = #(pcoords - vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z))
 
                 if quest.target.activation == "talktoNPC" or quest.target.activation == "prop" or
@@ -455,41 +456,117 @@ Citizen.CreateThread(function()
                     end
                 elseif quest.target.activation == "kill" then
                     local param = parseParamForKill(quest.target.param)
+                    -- param obsahuje: {model="...", count=..., spawn=true/false, range=...}
+                    
+                    -- 1. Inicializace počítadel (běží jen jednou při startu logiky)
                     if not quest.target.killedCount then
                         quest.target.killedCount = 0
                         quest.target.killCount = param.count
+                        quest.target.processedEntities = {} -- Pro world scan: aby se nezapočítal jeden 2x
                     end
-                    if dist < param.range + 30.0 then
+
+                    local playerPed = PlayerPedId()
+
+                    -- ==============================================================================
+                    -- VARIANTA A: SPAWN = TRUE (Script spawne cíle a označí je)
+                    -- ==============================================================================
+                    if param.spawn then
+                        -- Spawnování, pokud ještě neproběhlo
                         if not quest.target.killEntities then
-                            quest.target.killEntities = {}
-                            quest.target.killBlips = {}
-                            for i = 1, param.count do
-                                local spawnCoords = vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z) + vector3(
-                                    math.random(-param.range, param.range),
-                                    math.random(-param.range, param.range),
-                                    0)
-                                local ped = SpawnPed(param.model, spawnCoords)
-                                print("Spawned kill target: " .. param.model .. " | " .. ped .. " at " .. json.encode(spawnCoords))
-                                table.insert(quest.target.killBlips, Citizen.InvokeNative(0x23f74c2fda6e7c61, -1230993421, ped))
-                                table.insert(quest.target.killEntities, ped)
-                            end
-                        else
-                            for _, ped in pairs(quest.target.killEntities) do
-                                if DoesEntityExist(ped) and IsEntityDead(ped) then
-                                    quest.target.killedCount = quest.target.killedCount + 1
-                                    print("Killed " .. quest.target.killedCount .. " / " .. quest.target.killCount)
+                            if dist < param.range + 30.0 then
+                                quest.target.killEntities = {}
+                                quest.target.killBlips = {}
+                                for i = 1, param.count do
+                                    local spawnCoords = vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z) + vector3(
+                                        math.random(-param.range, param.range),
+                                        math.random(-param.range, param.range),
+                                        0)
                                     
+                                    local ped = SpawnPed(param.model, spawnCoords)
+                                    -- print("Spawned kill target: " .. param.model .. " | " .. ped)
+                                    
+                                    -- Přidáme blip a peda do tabulky
+                                    table.insert(quest.target.killBlips, Citizen.InvokeNative(0x23f74c2fda6e7c61, -1230993421, ped))
+                                    table.insert(quest.target.killEntities, ped)
                                 end
                             end
-                            if quest.target.killedCount >= quest.target.killCount then
-                                finishQuest(quest.id)
+                        else
+                            -- Kontrola stavu spawnutých entit
+                            for k, ped in pairs(quest.target.killEntities) do
+                                if DoesEntityExist(ped) then
+                                    if IsEntityDead(ped) then
+                                        -- Započítat kill
+                                        quest.target.killedCount = quest.target.killedCount + 1
+                                        
+                                        -- Smazat blip
+                                        if quest.target.killBlips and quest.target.killBlips[k] then
+                                            RemoveBlip(quest.target.killBlips[k])
+                                            quest.target.killBlips[k] = nil
+                                        end
+
+                                        -- Vyřadit z kontroly (aby se nepočítal znovu)
+                                        quest.target.killEntities[k] = nil
+                                        
+                                        notify("Zabit cíl: " .. quest.target.killedCount .. " / " .. quest.target.killCount)
+                                    end
+                                else
+                                    -- Pokud entita despawnula, vyřadíme ji, aby to neházelo error
+                                    quest.target.killEntities[k] = nil
+                                end
+                            end
+                        end
+
+                    -- ==============================================================================
+                    -- VARIANTA B: SPAWN = FALSE (Lov ve světě - hledá existující zvířata)
+                    -- ==============================================================================
+                    else 
+                        -- Skenujeme jen, když jsme blízko zóny úkolu (optimalizace)
+                        if dist < param.range + 50.0 then
+                            local targetModelHash = GetHashKey(param.model)
+                            local allPeds = GetGamePool('CPed')
+
+                            for _, ped in ipairs(allPeds) do
+                                -- Je to správný model a je mrtvý?
+                                if GetEntityModel(ped) == targetModelHash and IsEntityDead(ped) then
+                                    
+                                    -- Ještě jsme ho nezapočítali?
+                                    if not quest.target.processedEntities[ped] then
+                                        
+                                        -- Je v rádiusu úkolu?
+                                        local pedCoords = GetEntityCoords(ped)
+                                        local distFromZone = #(pedCoords - vector3(quest.target.coords.x, quest.target.coords.y, quest.target.coords.z))
+                                        
+                                        if distFromZone <= param.range then
+                                            -- Zabil ho hráč?
+                                            if GetPedSourceOfDeath(ped) == playerPed then
+                                                -- Započítat
+                                                quest.target.processedEntities[ped] = true
+                                                quest.target.killedCount = quest.target.killedCount + 1
+                                                
+                                                notify("Uloveno: " .. quest.target.killedCount .. " / " .. quest.target.killCount)
+                                            end
+                                        end
+                                    end
+                                end
                             end
                         end
                     end
-                    
+
+                    -- ==============================================================================
+                    -- SPOLEČNÁ KONTROLA DOKONČENÍ
+                    -- ==============================================================================
+                    if quest.target.killedCount >= quest.target.killCount then
+                        -- Úklid blipů (pokud nějaké zbyly z Varianty A)
+                        if quest.target.killBlips then
+                            for _, blip in pairs(quest.target.killBlips) do
+                                RemoveBlip(blip)
+                            end
+                            quest.target.killBlips = nil
+                        end
+                        finishQuest(quest.id)
+                    end
                 end
             end
-
         end
         Citizen.Wait(pause)
     end
