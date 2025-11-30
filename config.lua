@@ -5,6 +5,12 @@ Config.WebHook = ""
 Config.ServerName = 'WestHaven ** Loger'
 Config.DiscordColor = 16753920
 
+Config.QuestStates={
+    [0] = "Not Started",
+    [1] = "In Progress",
+    [100] = "Completed"
+}
+
 Config.Quests = {}
 Config.QuestData = {
    [1]= {

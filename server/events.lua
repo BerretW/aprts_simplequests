@@ -34,18 +34,18 @@ RegisterServerEvent("vorp_inventory:useItem")
 AddEventHandler("vorp_inventory:useItem", function(data)
     local _source = source
     local itemName = data.item
-    print("Item used: " .. itemName)
+    -- print("Item used: " .. itemName)
     exports.vorp_inventory:getItemByMainId(_source, data.id, function(data)
         if data == nil then
             return
         end
         for _, quest in pairs(Config.Quests) do
             if quest.start.activation == "useItem" and quest.start.param == itemName then
-                print("Triggering useItem for quest start")
+                debugPrint("Triggering useItem for quest start")
                 TriggerClientEvent("aprts_simplequests:client:onQuestStartUseItem", _source, quest.id)
             end
             if quest.target.activation == "useItem" and quest.target.param == itemName then
-                print("Triggering useItem for quest target")
+                debugPrint("Triggering useItem for quest target")
                 TriggerClientEvent("aprts_simplequests:client:onQuestTargetUseItem", _source, quest.id)
             end
         end

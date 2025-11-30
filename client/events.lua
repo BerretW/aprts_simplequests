@@ -15,7 +15,7 @@ AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
         Config.Quests[quest.id] = quest
     end
     for _, quest in pairs(Config.Quests) do
-        if GetQuestState(quest.id) == 100 then
+        if GetQuestState(quest.id) == 100 and not quest.repeatable then
             quest.active = false
         end
          if GetQuestState(quest.id) == 1 then

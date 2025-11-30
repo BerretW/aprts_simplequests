@@ -95,6 +95,9 @@ function SetQuestState(quest, value)
 end
 
 local function parseItemsFromString(itemString) -- "branch,5;wood,1" => {{name="branch",count=5},{name="wood",count=1}}
+    if not itemString or itemString == "" then
+        return {}
+    end
     local items = {}
     local itemPairs = string.split(itemString, ";")
     for _, pair in pairs(itemPairs) do
@@ -250,7 +253,7 @@ end
 
 function finishQuest(questID)
     local quest = Config.Quests[questID]
-    if quest.target.activation == "delivery" or quest.target.activation == "prop" then
+    if quest.target.activation == "delivery" or quest.target.activation == "prop" or quest.target.activation == "talktoNPC" then
         if not hasItems(questID, true) then
             notify("Nemáš všechny potřebné předměty pro dokončení úkolu.")
             return
