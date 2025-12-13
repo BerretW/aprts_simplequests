@@ -320,7 +320,7 @@ end
 function ActivateQuest(questID)
     ActiveQuestID = questID
     local quest = Config.Quests[questID]
-    if quest.target.coords and quest.target.blip then
+    if quest.target.coords and (quest.target.blip or quest.target.blip ~= "") then
         createRoute(quest.target.coords)
         TargetBlip = CreateBlip(quest.target.coords, quest.target.blip or "blip_mission", quest.name)
         SetBlipStyle(TargetBlip, "BLIP_STYLE_BOUNTY_TARGET")
