@@ -259,3 +259,5 @@ function LoadCharacterData()
         CharacterDataLoaded = true
     end)
 end
+
+

@@ -8,8 +8,10 @@ AddEventHandler("onClientResourceStart", function(resourceName)
 end)
 
 RegisterNetEvent("aprts_simplequests:client:recieveQuests")
-AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests)
+AddEventHandler("aprts_simplequests:client:recieveQuests", function(quests,groups)
     debugPrint("Received quests from server")
+    -- Uložení skupin
+    Config.QuestGroups = groups or {} 
     for _, quest in pairs(quests) do
         debugPrint("Loading quest: " .. quest.name)
         Config.Quests[quest.id] = quest
@@ -60,12 +62,12 @@ AddEventHandler("onResourceStop", function(resourceName)
             RemoveBlip(quest.start.blipOBJ)
             quest.start.blipOBJ = nil
         end
-        if quest.target.killBlips then
-            for _, blip in pairs(quest.target.killBlips) do
-                RemoveBlip(blip)
-            end
-            quest.target.killBlips = nil
-        end
+        -- if quest.target.killBlips then
+        --     for _, blip in pairs(quest.target.killBlips) do
+        --         RemoveBlip(blip)
+        --     end
+        --     quest.target.killBlips = nil
+        -- end
     end
     if TargetBlip then
         RemoveBlip(TargetBlip)

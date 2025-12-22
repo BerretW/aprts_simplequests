@@ -1,14 +1,90 @@
 <!DOCTYPE html>
-<html>
+<html lang="cs">
 <head>
     <meta charset="UTF-8">
-    <title>Sound Player</title>
+    <title>Quest Book</title>
+    <link rel="stylesheet" href="style.css">
+    <link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=Rye&display=swap" rel="stylesheet">
 </head>
 <body>
-    <!-- Audio element, který bude přehrávat zvuk -->
-    <audio id="player"></audio>
+    <audio id="game-player"></audio> 
+    <audio id="journal-player"></audio>
 
-    <!-- Připojení JavaScriptu -->
+    <div id="quest-book" class="book-container" style="display: none;">
+        <div class="book-cover">
+            <div class="page left-page">
+                <h2>Seznam úkolů</h2>
+                
+                <div class="tabs">
+                    <button class="tab-btn active" onclick="switchTab('active')">Probíhající</button>
+                    <button class="tab-btn" onclick="switchTab('completed')">Dokončené</button>
+                    <!-- Admin Tab (skrytý přes CSS, ukáže JS) -->
+                    <button id="admin-tab-btn" class="tab-btn admin-hidden" onclick="switchTab('all')">👑 Admin</button>
+                </div>
+
+                <ul id="quest-list" class="quest-list">
+                    <!-- JS generated -->
+                </ul>
+            </div>
+            
+            <div class="page right-page">
+                <div id="quest-details" class="quest-details hidden">
+                    <h2 id="detail-title">Název úkolu</h2>
+                    <!-- Info o stavu pro adminy -->
+                    <div id="admin-status-info" class="admin-hidden" style="text-align:center; color:#5d4037; font-size:14px; margin-bottom:5px;"></div>
+                    
+                    <div class="separator"></div>
+                    <p id="detail-desc">Popis úkolu...</p>
+                    
+                    <div class="detail-actions">
+                        <div id="audio-list" class="audio-section"></div>
+
+                        <!-- Standardní tlačítka -->
+                        <button id="btn-track" class="action-btn" onclick="trackQuest()">Sledovat úkol</button>
+                        
+                        <!-- Admin Panel Akce -->
+                        <div id="admin-controls" class="admin-controls admin-hidden">
+                            <div class="separator" style="margin: 10px 0; opacity:0.3;"></div>
+                            <h3 style="text-align:center; font-size:16px; margin:5px;">Admin Akce</h3>
+                            <button class="action-btn btn-reset" onclick="adminSetState(0)">♻️ Resetovat (0)</button>
+                            <button class="action-btn btn-start" onclick="adminSetState(1)">▶️ Spustit (1)</button>
+                            <button class="action-btn btn-complete" onclick="adminSetState(100)">✅ Dokončit (100)</button>
+                                <div class="separator" style="margin: 5px 0; opacity:0.3; width:50%"></div>
+    <button class="action-btn" style="background:#5d4037;" onclick="openEditModal()">✏️ Upravit texty</button>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="empty-state" class="empty-state">
+                    <p>Vyber úkol ze seznamu.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="close-hint">Zavřít [ESC]</div>
+    </div>
+<div id="edit-modal" class="modal-overlay hidden">
+        <div class="modal-content">
+            <h3>Úprava Questu <span id="edit-quest-id">#</span></h3>
+            
+            <label>Název:</label>
+            <input type="text" id="edit-name">
+            
+            <label>Popis (v deníku):</label>
+            <textarea id="edit-desc" rows="3"></textarea>
+            
+            <label>Start Text (NPC dialog):</label>
+            <textarea id="edit-start-text" rows="3"></textarea>
+            
+            <label>Target Text (Závěr dialog):</label>
+            <textarea id="edit-target-text" rows="3"></textarea>
+            
+            <div class="modal-buttons">
+                <button class="action-btn btn-danger" onclick="closeEditModal()">Zrušit</button>
+                <button class="action-btn btn-start" onclick="saveEditQuest()">Uložit změny</button>
+            </div>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
