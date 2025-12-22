@@ -112,13 +112,16 @@ local function parseItemsFromString(itemString) -- "branch,5;wood,1" => {{name="
     return items
 end
 
-local function parseParamForKill(param) -- "a_c_pronghorn_01,3,1,30" => {model="a_c_pronghorn_01",count=3,spawn=true,range=30}
+local function parseParamForKill(param) -- "a_c_pronghorn_01,10,3,true,30.0,50.0" =>"model,spawn_count,kill_count,agresive,spawn_region,kill_region" => {model="a_c_pronghorn_01", count=10, spawn=true/false, spawn_region=30.0, kill_region=50.0}
     local data = string.split(param, ",")
     local param = {
         model = data[1],
-        count = tonumber(data[2]),
-        spawn = data[3] == "1",
-        range = tonumber(data[4]) or 30
+        spawn_count = tonumber(data[2]),
+        kill_count = tonumber(data[3]),
+        aggressive = data[4] == "true",
+        spawn_region = tonumber(data[5]),
+        kill_region = tonumber(data[6])
+
     }
     return param
 end
@@ -335,12 +338,12 @@ function startQuest(questID)
         print("Tento úkol není aktivní nebo je aktivní jiný.")
         return
     end
-    
+
     local param = quest.start.param
     if quest.start.activation == "talktoNPC" then
         -- Zkontrolujeme, zda hráč má potřebný item
         local inventory = exports.vorp_inventory:getInventoryItems()
-       local items = parseItemsFromString(param)
+        local items = parseItemsFromString(param)
         for _, reqItem in pairs(items) do
             local found = false
             for _, invItem in pairs(inventory) do
@@ -475,17 +478,27 @@ Citizen.CreateThread(function()
 
                     end
                 elseif quest.target.activation == "distance" then
-                    if dist < quest.target.param then
+                    if dist < tonumber(quest.target.param) then
                         finishQuest(quest.id)
                     end
                 elseif quest.target.activation == "kill" then
+                    -- local param = {
+                    --     model = data[1],
+                    --     spawn_count = tonumber(data[2]),
+                    --     kill_count = tonumber(data[3]),
+                    --     aggressive = data[4] == "true",
+                    --     spawn_region = tonumber(data[5]),
+                    --     kill_region = tonumber(data[6])
+
+                    -- }
+
                     local param = parseParamForKill(quest.target.param)
                     -- param obsahuje: {model="...", count=..., spawn=true/false, range=...}
 
                     -- 1. Inicializace počítadel (běží jen jednou při startu logiky)
                     if not quest.target.killedCount then
                         quest.target.killedCount = 0
-                        quest.target.killCount = param.count
+                        quest.target.killCount = param.kill_count
                         quest.target.processedEntities = {} -- Pro world scan: aby se nezapočítal jeden 2x
                     end
 
@@ -494,23 +507,25 @@ Citizen.CreateThread(function()
                     -- ==============================================================================
                     -- VARIANTA A: SPAWN = TRUE (Script spawne cíle a označí je)
                     -- ==============================================================================
-                    if param.spawn then
+                    if param.spawn_count > 0 then
                         -- Spawnování, pokud ještě neproběhlo
                         if not quest.target.killEntities then
-                            if dist < param.range + 30.0 then
+                            if dist < param.kill_region + 50.0 then
                                 quest.target.killEntities = {}
                                 quest.target.killBlips = {}
-                                for i = 1, param.count do
+                                for i = 1, param.spawn_count do
                                     local spawnCoords = vector3(quest.target.coords.x, quest.target.coords.y,
                                         quest.target.coords.z) +
-                                                            vector3(math.random(-param.range, param.range),
-                                            math.random(-param.range, param.range), 0)
-
+                                                            vector3(math.random(-param.spawn_region, param.spawn_region),
+                                            math.random(-param.spawn_region, param.spawn_region), 0)
                                     local ped = SpawnPed(param.model, spawnCoords)
                                     -- print("Spawned kill target: " .. param.model .. " | " .. ped)
                                     ClearPedTasks(ped)
-                                    TaskCombatPed(ped, playerPed, 0, 16)
-                                    SetPedRelationshipGroupHash(ped, GetHashKey("hostile_group"))
+                                    if param.aggressive then
+                                        TaskCombatPed(ped, playerPed, 0, 16)
+                                        SetPedRelationshipGroupHash(ped, GetHashKey("hostile_group"))
+                                    end
+                                    
                                     -- Přidáme blip a peda do tabulky
                                     table.insert(quest.target.killBlips,
                                         Citizen.InvokeNative(0x23f74c2fda6e7c61, -1230993421, ped))
@@ -549,7 +564,7 @@ Citizen.CreateThread(function()
                         -- ==============================================================================
                     else
                         -- Skenujeme jen, když jsme blízko zóny úkolu (optimalizace)
-                        if dist < param.range + 50.0 then
+                        if dist < param.kill_region + 50.0 then
                             local targetModelHash = GetHashKey(param.model)
                             local allPeds = GetGamePool('CPed')
 
@@ -566,7 +581,7 @@ Citizen.CreateThread(function()
                                                                  vector3(quest.target.coords.x, quest.target.coords.y,
                                                 quest.target.coords.z))
 
-                                        if distFromZone <= param.range then
+                                        if distFromZone <= param.kill_region then
                                             -- Zabil ho hráč?
                                             if GetPedSourceOfDeath(ped) == playerPed then
                                                 -- Započítat
