@@ -21,7 +21,7 @@ class QuestEditor(QMainWindow):
         super().__init__()
         self.db = db_handler
         self.current_quest_id = None
-        self.setWindowTitle("APRTS SimpleQuest Editor V1.8 - start blip") 
+        self.setWindowTitle("APRTS SimpleQuest Editor V1.7 - Hints") 
         self.setGeometry(100, 100, 1200, 800)
 
         self._is_dirty = False
@@ -183,12 +183,6 @@ class QuestEditor(QMainWindow):
         
         tab_start = QWidget(); form_start = QFormLayout(tab_start)
         self.start_activation = QComboBox(); self.start_activation.addItems(start_activation_types)
-        
-        # --- PŘIDÁNO: start_blip ---
-        self.start_blip = QCheckBox() 
-        self.start_blip.setToolTip("Zaškrtněte pro zobrazení blipu na mapě při startu.")
-        # ---------------------------
-
         self.start_param = QLineEdit(); self.start_npc = QLineEdit(); self.start_coords = CoordsLineEdit()
         self.start_text = QTextEdit(); self.start_sound = QLineEdit()
         self.start_anim_dict = QLineEdit(); self.start_anim_name = QLineEdit()
@@ -199,11 +193,6 @@ class QuestEditor(QMainWindow):
         self.start_activation.currentTextChanged.connect(lambda: self._update_param_hints(self.start_activation, self.start_param))
 
         form_start.addRow("Aktivace:", self.start_activation); form_start.addRow("Parametr:", self.start_param)
-        
-        # --- PŘIDÁNO: Přidání do layoutu ---
-        form_start.addRow("Start Blip:", self.start_blip)
-        # -----------------------------------
-
         form_start.addRow("Model:", self.start_npc); form_start.addRow("Souřadnice:", self.start_coords)
         form_start.addRow("Text:", self.start_text); form_start.addRow("Zvuk:", self.start_sound)
         form_start.addRow("Animace (slovník):", self.start_anim_dict); form_start.addRow("Animace (název):", self.start_anim_name)
@@ -447,7 +436,6 @@ class QuestEditor(QMainWindow):
             self.description.setText(data.get('description', ''))
             self.hours_widget.setData(data.get('hoursOpen'))
             self.active.setChecked(bool(data.get('active', 0)))
-            self.start_blip.setChecked(bool(data.get('start_blip', 0)))  # Výchozí hodnota pro nový atribut
             self.repeatable.setChecked(bool(data.get('repeatable', 0)))
 
             completed_quests_json = data.get('complete_quests')
@@ -575,11 +563,6 @@ class QuestEditor(QMainWindow):
             'description': self.description.toPlainText() or None, 
             'repeatable': 1 if self.repeatable.isChecked() else 0, 
             'start_activation': self.start_activation.currentText() or None, 
-            
-            # --- PŘIDÁNO ---
-            'start_blip': 1 if self.start_blip.isChecked() else 0,
-            # ---------------
-
             'start_param': self.start_param.text() or None, 
             'start_npc': self.start_npc.text() or None, 
             'start_coords': self.start_coords.text().replace(" ", "") or None,

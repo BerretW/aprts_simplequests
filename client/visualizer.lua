@@ -25,7 +25,7 @@ Citizen.CreateThread(function()
         else
             for _, quest in pairs(Config.Quests) do
                 if quest.active and reqCheck(quest.id) then
-                    if quest.start.coords and quest.start.activation == "talktoNPC" then
+                    if quest.start.coords and quest.start.activation == "talktoNPC" and quest.start.blip and quest.start.blip ~= "" then
                         if not quest.start.blipOBJ then
                             quest.start.blipOBJ = CreateBlip(quest.start.coords, quest.start.blip, quest.name)
                             -- print(distance)

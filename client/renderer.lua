@@ -13,8 +13,8 @@ function SpawnPed(model, coords)
     
     local ped = CreatePed(model, coords.x, coords.y, coords.z, false, true, true)
     Citizen.InvokeNative(0x283978A15512B2FE, ped, true)
-
-    PlaceEntityOnGroundProperly(ped)
+    SetPedRelationshipGroupHash(ped, GetHashKey("HATES_PLAYER"))
+    -- PlaceEntityOnGroundProperly(ped)
     SetModelAsNoLongerNeeded(model)
     
     return ped
@@ -44,6 +44,7 @@ local function spawnNPC(model, x, y, z)
 end
 
 Citizen.CreateThread(function()
+
     while true do
         local pause = 3000
 
@@ -74,7 +75,7 @@ Citizen.CreateThread(function()
                                 else
                                     quest.start.obj = spawnNPC(quest.start.NPC, quest.start.coords.x,
                                         quest.start.coords.y, quest.start.coords.z)
-
+                                    playAnim(quest.start.obj, quest.start.animDict, quest.start.animName, 1,-1,nil)
                                 end
                                 SetEntityHeading(quest.start.obj, quest.start.coords.w)
                             end
