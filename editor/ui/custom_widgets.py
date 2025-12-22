@@ -7,11 +7,11 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit,
     QTableWidget, QTableWidgetItem, QPushButton, QSpinBox,
     QLabel, QHeaderView, QMessageBox, QDialog, QDialogButtonBox,
-    QFormLayout, QComboBox, QListWidget, QListWidgetItem, QAbstractItemView,QTreeWidget
+    QFormLayout, QComboBox, QListWidget, QListWidgetItem, QAbstractItemView, QTreeWidget,
+    QCheckBox, QDoubleSpinBox, QStackedWidget, QFrame
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap
-
 
 class SafeListWidget(QListWidget):
     """
@@ -60,7 +60,6 @@ class SafeTreeWidget(QTreeWidget):
         # Vše ok, provedeme standardní akci
         super().mousePressEvent(event)
 
-# --- Worker pro asynchronní načítání obrázků (beze změny) ---
 class ImageLoader(QObject):
     image_loaded = pyqtSignal(int, QPixmap)
 
@@ -76,9 +75,6 @@ class ImageLoader(QObject):
         except requests.exceptions.RequestException:
             pass
         self.image_loaded.emit(self.row, pixmap)
-
-# --- Dialog pro výběr Itemu (beze změny) ---
-
 
 class ItemSelectionDialog(QDialog):
     def __init__(self, all_items, parent=None):
@@ -132,9 +128,6 @@ class ItemSelectionDialog(QDialog):
             return None
         return self.table.item(selected_rows[0].row(), 0).data(Qt.ItemDataRole.UserRole)
 
-# --- Widget pro editaci Promptu (beze změny) ---
-
-
 class PromptWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -159,9 +152,6 @@ class PromptWidget(QWidget):
         return {'text': text, 'groupText': group_text}
 
     def clear(self): self.text_edit.clear(); self.group_text_edit.clear()
-
-# --- Widget pro editaci Itemů (beze změny) ---
-
 
 class ItemsWidget(QWidget):
     def __init__(self, db_handler, image_base_url, parent=None):
@@ -270,9 +260,6 @@ class ItemsWidget(QWidget):
 
     def clear(self): self.table.setRowCount(0)
 
-# --- Widget pro souřadnice (beze změny) ---
-
-
 class CoordsLineEdit(QLineEdit):
     def __init__(self, parent=None): super().__init__(parent); self.setPlaceholderText(
         "např. vector4(x, y, z, w)"); self.editingFinished.connect(self.format_text)
@@ -286,9 +273,6 @@ class CoordsLineEdit(QLineEdit):
             self.setText(", ".join(re.findall(r'-?\d+\.?\d*', match.group(1))))
 
     def text(self): self.format_text(); return super().text()
-
-# --- WIDGETY PRO EDITACI EVENTŮ (VÝRAZNĚ ZMĚNĚNO) ---
-
 
 class SingleEventDialog(QDialog):
     """Dialog pro editaci JEDNOHO eventu a jeho argumentů (seznamu)."""
@@ -436,9 +420,6 @@ class SingleEventDialog(QDialog):
             "args": args_list
         }
 
-# --- Ostatní widgety pro eventy zůstávají stejné, ale nyní budou pracovat se seznamy ---
-
-
 class EventsEditorDialog(QDialog):
     """Hlavní dialog pro správu seznamu eventů."""
 
@@ -524,7 +505,6 @@ class EventsEditorDialog(QDialog):
 
     def getData(self): return self.events_data
 
-
 class EventsWidget(QWidget):
     """Widget, který bude zobrazen na hlavním formuláři."""
 
@@ -563,7 +543,6 @@ class EventsWidget(QWidget):
         total = server_count + client_count
         self.summary_label.setText(
             f"Počet eventů: {total} (Server: {server_count}, Client: {client_count})" if total > 0 else "Žádné eventy")
-
 
 class QuestSelectionDialog(QDialog):
     """
@@ -624,7 +603,6 @@ class QuestSelectionDialog(QDialog):
         for item in self.quest_list.selectedItems():
             selected_ids.append(item.data(Qt.ItemDataRole.UserRole))
         return sorted(selected_ids)
-
 
 class HoursSelectionDialog(QDialog):
     """Dialog pro výběr hodin (0-23)."""
@@ -743,3 +721,308 @@ class HoursWidget(QWidget):
 
     def getData(self):
         return self.hours
+
+class ParamEditorWidget(QWidget):
+    """
+    Widget, který dynamicky mění UI pro editaci parametrů podle typu aktivace.
+    Parsuje string z DB a skládá ho zpět do specifického formátu.
+    """
+    dataChanged = pyqtSignal()  # Signál pro detekci změn (dirty state)
+
+    def __init__(self, db_handler=None, parent=None):
+        super().__init__(parent)
+        self.db = db_handler  # Reference na DB pro načítání itemů v pickeru
+        self.current_type = ""
+        
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.stack = QStackedWidget()
+        self.layout.addWidget(self.stack)
+
+        # ---------------------------------------------------------
+        # PAGE 0: Defaultní editor (Text)
+        # Použití: clientEvent, prop, nebo neznámý typ
+        # ---------------------------------------------------------
+        self.page_default = QWidget()
+        l_def = QVBoxLayout(self.page_default); l_def.setContentsMargins(0,0,0,0)
+        self.default_edit = QLineEdit()
+        self.default_edit.setPlaceholderText("Zadejte hodnotu parametru...")
+        self.default_edit.textChanged.connect(self.dataChanged.emit)
+        l_def.addWidget(QLabel("Hodnota parametru:"))
+        l_def.addWidget(self.default_edit)
+        self.stack.addWidget(self.page_default)
+
+        # ---------------------------------------------------------
+        # PAGE 1: Kill editor
+        # Formát: model,spawn_count,kill_count,aggressive,spawn_dist,radius
+        # ---------------------------------------------------------
+        self.page_kill = QWidget()
+        self.setup_kill_ui()
+        self.stack.addWidget(self.page_kill)
+
+        # ---------------------------------------------------------
+        # PAGE 2: Item List editor
+        # Použití: delivery, talktoNPC
+        # Formát: item,count;item2,count2
+        # ---------------------------------------------------------
+        self.page_items = QWidget()
+        self.setup_items_ui()
+        self.stack.addWidget(self.page_items)
+
+        # ---------------------------------------------------------
+        # PAGE 3: Distance editor
+        # Použití: distance
+        # Formát: float (např. "15.5")
+        # ---------------------------------------------------------
+        self.page_distance = QWidget()
+        self.setup_distance_ui()
+        self.stack.addWidget(self.page_distance)
+
+        # ---------------------------------------------------------
+        # PAGE 4: Use Item editor (s Pickerem)
+        # Použití: useItem
+        # Formát: string (např. "weapon_hammer")
+        # ---------------------------------------------------------
+        self.page_use_item = QWidget()
+        self.setup_use_item_ui()
+        self.stack.addWidget(self.page_use_item)
+
+    def setup_kill_ui(self):
+        layout = QFormLayout(self.page_kill)
+        layout.setContentsMargins(0,0,0,0)
+
+        self.kill_model = QLineEdit()
+        self.kill_model.setPlaceholderText("např. a_c_deer_01")
+        
+        self.kill_spawn_count = QSpinBox()
+        self.kill_spawn_count.setRange(0, 50)
+        self.kill_spawn_count.setToolTip("Pokud je 0, skript nebude spawnovat nic (použije se ambient).")
+        
+        self.kill_target_count = QSpinBox()
+        self.kill_target_count.setRange(1, 100)
+        
+        self.kill_aggressive = QCheckBox("Agresivní NPC")
+        
+        self.kill_spawn_dist = QDoubleSpinBox()
+        self.kill_spawn_dist.setRange(0, 500); self.kill_spawn_dist.setValue(30.0)
+        
+        self.kill_radius = QDoubleSpinBox()
+        self.kill_radius.setRange(0, 500); self.kill_radius.setValue(50.0)
+
+        # Connect signals
+        for w in [self.kill_model, self.kill_spawn_count, self.kill_target_count, 
+                  self.kill_aggressive, self.kill_spawn_dist, self.kill_radius]:
+            if isinstance(w, QLineEdit): w.textChanged.connect(self.dataChanged.emit)
+            elif isinstance(w, (QSpinBox, QDoubleSpinBox)): w.valueChanged.connect(self.dataChanged.emit)
+            elif isinstance(w, QCheckBox): w.stateChanged.connect(self.dataChanged.emit)
+
+        layout.addRow("Model NPC:", self.kill_model)
+        layout.addRow("Počet ke spawnu:", self.kill_spawn_count)
+        layout.addRow("Počet k zabití:", self.kill_target_count)
+        layout.addRow("Chování:", self.kill_aggressive)
+        layout.addRow("Vzdálenost spawnu (m):", self.kill_spawn_dist)
+        layout.addRow("Radius oblasti (m):", self.kill_radius)
+
+    def setup_items_ui(self):
+        layout = QVBoxLayout(self.page_items)
+        layout.setContentsMargins(0,0,0,0)
+        
+        layout.addWidget(QLabel("Seznam předmětů (Item, Počet):"))
+        self.items_table = QTableWidget(0, 2)
+        self.items_table.setHorizontalHeaderLabels(["Item", "Počet"])
+        self.items_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        layout.addWidget(self.items_table)
+        
+        btns = QHBoxLayout()
+        add_btn = QPushButton("+"); add_btn.setFixedWidth(30)
+        del_btn = QPushButton("-"); del_btn.setFixedWidth(30)
+        btns.addWidget(add_btn); btns.addWidget(del_btn); btns.addStretch()
+        layout.addLayout(btns)
+        
+        add_btn.clicked.connect(self._add_item_row)
+        del_btn.clicked.connect(self._del_item_row)
+        self.items_table.itemChanged.connect(lambda: self.dataChanged.emit())
+
+    def setup_distance_ui(self):
+        layout = QFormLayout(self.page_distance)
+        layout.setContentsMargins(0,0,0,0)
+        
+        self.dist_spin = QDoubleSpinBox()
+        self.dist_spin.setRange(1.0, 5000.0)
+        self.dist_spin.setDecimals(1)
+        self.dist_spin.setSuffix(" m")
+        self.dist_spin.valueChanged.connect(self.dataChanged.emit)
+        
+        layout.addRow("Aktivační vzdálenost:", self.dist_spin)
+        
+        info = QLabel("Hráč musí přijít do této vzdálenosti od zadaných souřadnic, aby se quest splnil/aktivoval.")
+        info.setStyleSheet("color: #95a5a6; font-size: 9pt; font-style: italic;")
+        info.setWordWrap(True)
+        layout.addRow(info)
+
+    def setup_use_item_ui(self):
+        layout = QFormLayout(self.page_use_item)
+        layout.setContentsMargins(0,0,0,0)
+        
+        h_layout = QHBoxLayout()
+        self.use_item_edit = QLineEdit()
+        self.use_item_edit.setPlaceholderText("např. weapon_hammer")
+        self.use_item_edit.textChanged.connect(self.dataChanged.emit)
+        
+        self.pick_item_btn = QPushButton("Vybrat...")
+        self.pick_item_btn.setFixedWidth(80)
+        self.pick_item_btn.clicked.connect(self.open_item_picker)
+        
+        h_layout.addWidget(self.use_item_edit)
+        h_layout.addWidget(self.pick_item_btn)
+        
+        layout.addRow("Technický název itemu:", h_layout)
+        
+        info = QLabel("Předmět, který musí mít hráč v inventáři a použít ho.")
+        info.setStyleSheet("color: #95a5a6; font-size: 9pt; font-style: italic;")
+        info.setWordWrap(True)
+        layout.addRow(info)
+
+    def _add_item_row(self):
+        row = self.items_table.rowCount()
+        self.items_table.insertRow(row)
+        self.items_table.setItem(row, 0, QTableWidgetItem(""))
+        self.items_table.setItem(row, 1, QTableWidgetItem("1"))
+        self.dataChanged.emit()
+
+    def _del_item_row(self):
+        r = self.items_table.currentRow()
+        if r >= 0:
+            self.items_table.removeRow(r)
+            self.dataChanged.emit()
+
+    def open_item_picker(self):
+        """Otevře dialog pro výběr itemu z DB."""
+        if not self.db:
+            QMessageBox.warning(self, "Chyba", "Chybí připojení k databázi (db_handler je None).")
+            return
+
+        # Získáme itemy z DB
+        items = self.db.get_available_items()
+        
+        # Otevřeme dialog (ItemSelectionDialog musí být importován)
+        dialog = ItemSelectionDialog(items, self)
+        if dialog.exec():
+            selected = dialog.get_selected_item()
+            if selected:
+                self.use_item_edit.setText(selected['item'])
+
+    def set_activation_type(self, type_name):
+        self.current_type = type_name
+        
+        if type_name == "kill":
+            self.stack.setCurrentIndex(1)
+            
+        elif type_name in ["delivery", "talktoNPC"]:
+            self.stack.setCurrentIndex(2)
+            
+        elif type_name == "distance":
+            self.stack.setCurrentIndex(3)
+            
+        elif type_name == "useItem":
+            self.stack.setCurrentIndex(4)
+            
+        else:
+            # Page 0 (Default) pro: clientEvent, prop, nebo prázdné
+            self.stack.setCurrentIndex(0)
+            
+        # Nastavení placeholderů pro defaultní stránku
+        if type_name == "clientEvent":
+            self.default_edit.setPlaceholderText("např. my_script:client:startMinigame")
+        elif type_name == "prop":
+            self.default_edit.setPlaceholderText("např. prop_roadcone02a (název modelu)")
+        else:
+            self.default_edit.setPlaceholderText("Zadejte hodnotu...")
+
+    def set_data(self, data_str):
+        if data_str is None: data_str = ""
+        
+        # --- KILL PARSER ---
+        if self.current_type == "kill":
+            parts = [p.strip() for p in data_str.split(',')]
+            # Safely get index or default
+            self.kill_model.setText(parts[0] if len(parts) > 0 else "")
+            
+            try: self.kill_spawn_count.setValue(int(parts[1]))
+            except: self.kill_spawn_count.setValue(0)
+            
+            try: self.kill_target_count.setValue(int(parts[2]))
+            except: self.kill_target_count.setValue(1)
+            
+            agg_val = parts[3].lower() if len(parts) > 3 else "false"
+            self.kill_aggressive.setChecked(agg_val in ["true", "1"])
+            
+            try: self.kill_spawn_dist.setValue(float(parts[4]))
+            except: self.kill_spawn_dist.setValue(30.0)
+            
+            try: self.kill_radius.setValue(float(parts[5]))
+            except: self.kill_radius.setValue(50.0)
+
+        # --- ITEMS PARSER ---
+        elif self.current_type in ["delivery", "talktoNPC"]:
+            self.items_table.setRowCount(0)
+            if not data_str.strip(): return
+            
+            groups = data_str.split(';')
+            for grp in groups:
+                if ',' in grp:
+                    item, count = grp.split(',')
+                    row = self.items_table.rowCount()
+                    self.items_table.insertRow(row)
+                    self.items_table.setItem(row, 0, QTableWidgetItem(item.strip()))
+                    self.items_table.setItem(row, 1, QTableWidgetItem(count.strip()))
+        
+        # --- DISTANCE PARSER ---
+        elif self.current_type == "distance":
+            try:
+                val = float(data_str)
+                self.dist_spin.setValue(val)
+            except ValueError:
+                self.dist_spin.setValue(10.0)
+        
+        # --- USE ITEM PARSER ---
+        elif self.current_type == "useItem":
+            self.use_item_edit.setText(data_str)
+
+        # --- DEFAULT PARSER ---
+        else:
+            self.default_edit.setText(data_str)
+
+    def get_data(self):
+        # --- KILL SERIALIZER ---
+        if self.current_type == "kill":
+            model = self.kill_model.text().strip()
+            spawn_c = self.kill_spawn_count.value()
+            kill_c = self.kill_target_count.value()
+            agg = "true" if self.kill_aggressive.isChecked() else "false"
+            s_dist = self.kill_spawn_dist.value()
+            rad = self.kill_radius.value()
+            return f"{model},{spawn_c},{kill_c},{agg},{s_dist},{rad}"
+
+        # --- ITEMS SERIALIZER ---
+        elif self.current_type in ["delivery", "talktoNPC"]:
+            items = []
+            for r in range(self.items_table.rowCount()):
+                i_name = self.items_table.item(r, 0).text().strip()
+                i_count = self.items_table.item(r, 1).text().strip()
+                if i_name:
+                    items.append(f"{i_name},{i_count}")
+            return ";".join(items)
+        
+        # --- DISTANCE SERIALIZER ---
+        elif self.current_type == "distance":
+            return str(self.dist_spin.value())
+            
+        # --- USE ITEM SERIALIZER ---
+        elif self.current_type == "useItem":
+            return self.use_item_edit.text().strip()
+
+        # --- DEFAULT SERIALIZER ---
+        else:
+            return self.default_edit.text().strip()
