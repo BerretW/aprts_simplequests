@@ -124,7 +124,8 @@ function finishQuest(questID)
     ClearGpsMultiRoute()
     
     if DoesEntityExist(quest.target.obj) then
-        playAnim(quest.target.obj, quest.target.animDict, quest.target.animName, 0, -1, quest.target.sound)
+        playAnim(quest.target.obj, quest.target.animDict, quest.target.animName, 0, 10, quest.target.sound)
+        DeleteEntity(quest.target.obj)
     end
     
     TriggerServerEvent("aprts_simplequests:server:finishQuest", questID)

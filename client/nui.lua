@@ -63,6 +63,7 @@ function GetQuestDataForUI()
             groupId = gId,       -- NOVÉ
             groupName = gName,   -- NOVÉ
             name = quest.name,
+            image = quest.image,
             description = quest.description,
             start_text = quest.start.text,   -- NOVÉ (pro editaci)
             target_text = quest.target.text, -- NOVÉ (pro editaci)

@@ -62,12 +62,31 @@ end
 function playAnim(entity, dict, name, flag, time, sound)
     -- print(entity, dict, name, flag, time, sound)
     if sound then
-        SendNUIMessage({
-            action = 'playSound',
-            soundFile = sound,
-            volume = 1.0
-        })
+
+        if DoesEntityExist(entity) == false then
+            SendNUIMessage({
+                action = 'playSound',
+                soundFile = sound,
+                volume = 1.0
+            })
+
+        else
+            local coords = GetEntityCoords(entity)
+
+            TriggerServerEvent('sound_sys:playSound', {
+                url = sound,
+                volume = 1.0,
+                location = { x = coords.x, y = coords.y, z = coords.z },
+                interior = GetInteriorFromEntity(entity),
+                distance = 15.0,
+                refDistance = 1.0,
+                rolloffFactor = 1.0,
+                startNetTime = GetNetworkTime(),
+                isLocal = true
+            })
+        end
     end
+
     RequestAnimDict(dict)
     local waitSkip = 0
     while not HasAnimDictLoaded(dict) do

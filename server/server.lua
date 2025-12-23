@@ -195,6 +195,7 @@ function LoadQuests()
                     bljobs = safeJsonDecode(quest.bljobs, quest.id, 'bljobs') or {},
                     repeatable = quest.repeatable,
                     complete_quests = safeJsonDecode(quest.complete_quests, quest.id, 'complete_quests') or {},
+                    image = quest.image or nil,
                     start = {
                         activation = quest.start_activation,
                         param = quest.start_param,
