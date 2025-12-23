@@ -29,7 +29,22 @@ class Database:
         except pymysql.Error as e:
             QMessageBox.critical(None, "Chyba DB", f"Nepodařilo se načíst seznam předmětů:\n{e}")
             return []
-            
+         # --- NOVÁ METODA PRO NAČTENÍ PRACÍ ---
+    def get_all_jobs(self):
+        """Vrátí seznam všech prací (name, label) z tabulky aprts_jobs."""
+        try:
+            with self.connection.cursor() as cursor:
+                # Načteme interní název (name) a zobrazovaný název (label)
+                # Seřadíme podle labelu pro lepší přehlednost
+                cursor.execute("SELECT name, label FROM aprts_jobs ORDER BY label")
+                result = cursor.fetchall()
+                return result if result else []
+        except pymysql.Error as e:
+            # Logujeme chybu do konzole, ale neshazujeme aplikaci kritickou hláškou,
+            # widget si s prázdným seznamem poradí.
+            print(f"Chyba DB při načítání prací z aprts_jobs: {e}")
+            return []
+               
     # --- NOVÁ METODA PRO SKUPINY ---
     def get_quest_groups(self):
         """Načte seznam dostupných skupin questů."""
@@ -176,3 +191,5 @@ class Database:
             return True, message, saved_id
         except pymysql.Error as e:
             return False, f"Chyba při ukládání questu:\n{e}", None
+        
+    

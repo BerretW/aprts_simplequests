@@ -7,11 +7,15 @@ from PyQt6.QtWidgets import (
     QLineEdit, QTextEdit, QCheckBox, QComboBox, QPushButton, 
     QSpinBox, QLabel, QMessageBox
 )
-from PyQt6.QtCore import pyqtSignal
+# PŘIDÁNY IMPORTY PRO OBRÁZKY A SÍŤ
+from PyQt6.QtGui import QPixmap
+from PyQt6.QtNetwork import QNetworkAccessManager, QNetworkRequest, QNetworkReply
+from PyQt6.QtCore import pyqtSignal, QUrl, Qt
 
 from ..custom_widgets import (
     PromptWidget, ItemsWidget, CoordsLineEdit, EventsWidget,
-    QuestSelectionDialog, HoursWidget, ParamEditorWidget
+    # PŘIDÁN IMPORT NOVÉHO WIDGETU
+    QuestSelectionDialog, HoursWidget, ParamEditorWidget, JobSelectorWidget
 )
 
 class QuestDetailsPanel(QWidget):
@@ -26,6 +30,9 @@ class QuestDetailsPanel(QWidget):
         self.quest_groups = []
         self._dirty_widgets = []
         
+        # PŘIDÁNO: Network manager pro asynchronní stahování obrázků
+        self.nam = QNetworkAccessManager(self)
+
         self.init_ui()
         self.connect_dirty_signals()
 
@@ -65,9 +72,24 @@ class QuestDetailsPanel(QWidget):
         self.name = QLineEdit(); self.description = QTextEdit()
         self.hours = HoursWidget(); self.active = QCheckBox()
         self.repeatable = QCheckBox()
-        self.jobs = QTextEdit(); self.jobs.setToolTip("JSON: [{\"job\": \"police\", \"grade\": 0}]")
-        self.bljobs = QTextEdit(); self.bljobs.setToolTip("JSON seznam jobů")
         
+        # ZMĚNA: Použití JobSelectorWidget místo QTextEdit
+        # Předáváme self.db, aby widget mohl načíst seznam prací
+        self.jobs = JobSelectorWidget(self.db)
+        self.bljobs = JobSelectorWidget(self.db)
+        
+        # --- SEKVENCE PRO OBRÁZEK ---
+        self.image = QLineEdit(); self.image.setToolTip("URL obrázku (volitelné)")
+        # Spustit načtení obrázku, když uživatel dokončí editaci URL (např. stiskne Enter nebo klikne jinam)
+        self.image.editingFinished.connect(self.load_image)
+
+        # PŘIDÁNO: Label pro náhled obrázku
+        self.image_preview = QLabel("Náhled obrázku")
+        self.image_preview.setFixedSize(300, 200) # Pevná velikost náhledu
+        self.image_preview.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.image_preview.setStyleSheet("border: 1px solid gray; background-color: #f5f5f5; color: gray;")
+        # ---------------------------
+
         # Complete quests logic
         self.comp_quests = QLineEdit(); self.comp_quests.setReadOnly(True)
         sel_q_btn = QPushButton("Vybrat..."); sel_q_btn.clicked.connect(self.open_quest_selection)
@@ -78,6 +100,11 @@ class QuestDetailsPanel(QWidget):
         form_gen.addRow("Hodiny:", self.hours); form_gen.addRow("Aktivní:", self.active)
         form_gen.addRow("Opakovatelný:", self.repeatable)
         form_gen.addRow("Povolené práce:", self.jobs); form_gen.addRow("Zakázané práce:", self.bljobs)
+        
+        # PŘIDÁNO: Zobrazení pole pro URL a náhledu v layoutu
+        form_gen.addRow("URL obrázku:", self.image)
+        form_gen.addRow("Náhled:", self.image_preview)
+        
         form_gen.addRow("Vyžaduje questy:", comp_lo)
         self.tabs.addTab(tab_gen, "Obecné")
 
@@ -86,10 +113,7 @@ class QuestDetailsPanel(QWidget):
         self.start_act = QComboBox(); self.start_act.addItems(["", "talktoNPC", "distance", "useItem", "clientEvent", "prop"])
         self.start_blip = QCheckBox(); self.start_blip.setToolTip("Zobrazit blip na začátku?")
         
-        # ZMĚNA: Předáváme self.db pro Item Picker
         self.start_param = ParamEditorWidget(db_handler=self.db)
-        
-        # Propojení změny typu aktivace
         self.start_act.currentTextChanged.connect(lambda t: self.start_param.set_activation_type(t))
 
         self.start_npc = QLineEdit(); self.start_coords = CoordsLineEdit()
@@ -111,10 +135,7 @@ class QuestDetailsPanel(QWidget):
         tab_target = QWidget(); form_target = QFormLayout(tab_target)
         self.target_act = QComboBox(); self.target_act.addItems(["", "talktoNPC", "distance", "useItem", "clientEvent", "prop", "delivery", "kill"])
         
-        # ZMĚNA: Předáváme self.db pro Item Picker
         self.target_param = ParamEditorWidget(db_handler=self.db)
-        
-        # Propojení změny typu aktivace
         self.target_act.currentTextChanged.connect(lambda t: self.target_param.set_activation_type(t))
 
         self.target_npc = QLineEdit(); self.target_blip = QLineEdit()
@@ -141,9 +162,11 @@ class QuestDetailsPanel(QWidget):
         self._dirty_widgets.extend(self.tabs.findChildren(QComboBox))
         self._dirty_widgets.extend(self.tabs.findChildren(QSpinBox))
         
-        # Přidání custom Param widgetů
         self._dirty_widgets.append(self.start_param)
         self._dirty_widgets.append(self.target_param)
+        # ZMĚNA: Přidání nových widgetů pro sledování změn
+        self._dirty_widgets.append(self.jobs)
+        self._dirty_widgets.append(self.bljobs)
 
         for w in self._dirty_widgets:
             if isinstance(w, QLineEdit): w.textChanged.connect(self.data_changed.emit)
@@ -152,6 +175,47 @@ class QuestDetailsPanel(QWidget):
             elif isinstance(w, QComboBox): w.currentIndexChanged.connect(self.data_changed.emit)
             elif isinstance(w, QSpinBox): w.valueChanged.connect(self.data_changed.emit)
             elif isinstance(w, ParamEditorWidget): w.dataChanged.connect(self.data_changed.emit)
+            # ZMĚNA: Napojení signálu nového widgetu
+            elif isinstance(w, JobSelectorWidget): w.dataChanged.connect(self.data_changed.emit)
+
+    # --- PŘIDÁNY METODY PRO NAČÍTÁNÍ OBRÁZKU ---
+    def load_image(self):
+        """Spustí asynchronní stahování obrázku z URL v self.image."""
+        url_str = self.image.text().strip()
+        if not url_str:
+            self.image_preview.clear()
+            self.image_preview.setText("Žádná URL")
+            return
+
+        # Vytvoření požadavku
+        req = QNetworkRequest(QUrl(url_str))
+        reply = self.nam.get(req)
+        # Napojení signálu dokončení na zpracující metodu
+        reply.finished.connect(lambda: self.on_image_downloaded(reply))
+        self.image_preview.setText("Načítám...")
+
+    def on_image_downloaded(self, reply):
+        """Zpracuje stažená data a zobrazí obrázek."""
+        reply.deleteLater() # Uvolnit paměť po zpracování
+
+        if reply.error() != QNetworkReply.NetworkError.NoError:
+             self.image_preview.setText(f"Chyba: {reply.errorString()}")
+             return
+
+        data = reply.readAll()
+        pixmap = QPixmap()
+        # Zkusit načíst data jako obrázek
+        if pixmap.loadFromData(data):
+            # Zmenšit obrázek tak, aby se vešel do labelu a zachoval poměr stran
+            scaled_pixmap = pixmap.scaled(
+                self.image_preview.size(), 
+                Qt.AspectRatioMode.KeepAspectRatio, 
+                Qt.TransformationMode.SmoothTransformation
+            )
+            self.image_preview.setPixmap(scaled_pixmap)
+        else:
+             self.image_preview.setText("Neplatná data obrázku")
+    # ------------------------------------------
 
     def set_enabled(self, enabled):
         self.tabs.setEnabled(enabled)
@@ -186,17 +250,20 @@ class QuestDetailsPanel(QWidget):
             self.active.setChecked(bool(data.get('active', 0)))
             self.start_blip.setChecked(bool(data.get('start_blip', 0)))
             self.repeatable.setChecked(bool(data.get('repeatable', 0)))
+            
+            # PŘIDÁNO: Načtení URL obrázku a spuštění jeho zobrazení
+            self.image.setText(data.get('image', ''))
+            self.load_image()
 
-            # JSONs
-            self._set_json(self.jobs, data.get('jobs'))
-            self._set_json(self.bljobs, data.get('bljobs'))
+            # ZMĚNA: Použití setData na nových widgetech místo pomocné funkce _set_json
+            self.jobs.setData(data.get('jobs'))
+            self.bljobs.setData(data.get('bljobs'))
+            
             self._set_comp_quests(data.get('complete_quests'))
 
             # Start
             act_start = data.get('start_activation', '')
             self.start_act.setCurrentText(act_start)
-            
-            # Nejdříve typ, pak data
             self.start_param.set_activation_type(act_start)
             self.start_param.set_data(data.get('start_param', ''))
             
@@ -213,8 +280,6 @@ class QuestDetailsPanel(QWidget):
             # Target
             act_target = data.get('target_activation', '')
             self.target_act.setCurrentText(act_target)
-            
-            # Nejdříve typ, pak data
             self.target_param.set_activation_type(act_target)
             self.target_param.set_data(data.get('target_param', ''))
             
@@ -235,13 +300,8 @@ class QuestDetailsPanel(QWidget):
 
     def get_data(self):
         """Vrátí slovník dat připravený pro DB."""
-        # Validace JSON polí
-        try:
-            j_jobs = json.dumps(json.loads(self.jobs.toPlainText().strip()), ensure_ascii=False) if self.jobs.toPlainText().strip() else None
-            j_bljobs = json.dumps(json.loads(self.bljobs.toPlainText().strip()), ensure_ascii=False) if self.bljobs.toPlainText().strip() else None
-        except Exception as e:
-            QMessageBox.warning(self, "Chyba JSON", f"Neplatný formát JSON u prací:\n{e}")
-            return None
+        # ZMĚNA: Odstraněn blok try-except pro parsování JSON z textových polí.
+        # Nové widgety vrací data přímo metodou getData().
 
         # Complete quests parse
         cq_str = self.comp_quests.text().strip()
@@ -254,17 +314,19 @@ class QuestDetailsPanel(QWidget):
             'hoursOpen': json.dumps(self.hours.getData()),
             'active': 1 if self.active.isChecked() else 0,
             'repeatable': 1 if self.repeatable.isChecked() else 0,
-            'jobs': j_jobs,
-            'bljobs': j_bljobs,
+            
+            # ZMĚNA: Získání dat z nových widgetů
+            'jobs': self.jobs.getData(),
+            'bljobs': self.bljobs.getData(),
+            
             'complete_quests': cq_data,
-
+            # PŘIDÁNO: Uložení URL obrázku
+            'image': self.image.text() or None,
+            
             # START
             'start_activation': self.start_act.currentText() or None,
             'start_blip': 1 if self.start_blip.isChecked() else 0,
-            
-            # Získání dat z ParamWidgetu
             'start_param': self.start_param.get_data() or None,
-            
             'start_npc': self.start_npc.text() or None,
             'start_coords': self.start_coords.text().replace(" ", "") or None,
             'start_text': self.start_text.toPlainText() or None,
@@ -277,10 +339,7 @@ class QuestDetailsPanel(QWidget):
 
             # TARGET
             'target_activation': self.target_act.currentText() or None,
-            
-            # Získání dat z ParamWidgetu
             'target_param': self.target_param.get_data() or None,
-            
             'target_npc': self.target_npc.text() or None,
             'target_blip': self.target_blip.text() or None,
             'target_coords': self.target_coords.text().replace(" ", "") or None,
@@ -299,13 +358,18 @@ class QuestDetailsPanel(QWidget):
         self.block_signals_recursive(True)
         # Vymazání všech polí
         for w in self.findChildren((QLineEdit, QTextEdit)): w.clear()
-        for w in self.findChildren((PromptWidget, ItemsWidget, EventsWidget)): w.clear()
+        # ZMĚNA: Přidán JobSelectorWidget do seznamu pro vymazání
+        for w in self.findChildren((PromptWidget, ItemsWidget, EventsWidget, JobSelectorWidget)): w.clear()
         self.hours.setData(None)
         self.active.setChecked(True); self.repeatable.setChecked(False)
         self.start_blip.setChecked(False)
         self.target_money.setValue(0)
         self.start_act.setCurrentIndex(0); self.target_act.setCurrentIndex(0)
         
+        # PŘIDÁNO: Vymazání náhledu obrázku
+        self.image_preview.clear()
+        self.image_preview.setText("Náhled obrázku")
+
         # Reset Param Widgetů
         self.start_param.set_activation_type("")
         self.start_param.set_data("")
@@ -324,6 +388,7 @@ class QuestDetailsPanel(QWidget):
             self.data_changed.emit()
 
     def _set_json(self, widget, data):
+        # TATO METODA SE UŽ NEPOUŽÍVÁ PRO JOBS, ALE ZATÍM JI NECHÁVÁM PRO PŘÍPADNÉ JINÉ POUŽITÍ
         if not data: widget.setText(""); return
         try: widget.setText(json.dumps(json.loads(data), indent=4, ensure_ascii=False))
         except: widget.setText(data)

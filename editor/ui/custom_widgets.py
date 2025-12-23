@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QTableWidget, QTableWidgetItem, QPushButton, QSpinBox,
     QLabel, QHeaderView, QMessageBox, QDialog, QDialogButtonBox,
     QFormLayout, QComboBox, QListWidget, QListWidgetItem, QAbstractItemView, QTreeWidget,
-    QCheckBox, QDoubleSpinBox, QStackedWidget, QFrame
+    QCheckBox, QDoubleSpinBox, QStackedWidget, QFrame, QCompleter
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QPixmap
@@ -1026,3 +1026,226 @@ class ParamEditorWidget(QWidget):
         # --- DEFAULT SERIALIZER ---
         else:
             return self.default_edit.text().strip()
+
+class JobSelectorWidget(QWidget):
+    """
+    Widget pro výběr prací a jejich minimální úrovně (grade).
+    Generuje JSON ve formátu: [{"job": "police", "grade": 0}, ...]
+    Vyžaduje, aby db_handler měl metodu .get_all_jobs().
+    """
+    dataChanged = pyqtSignal()  # Signál pro detekci změn (dirty state)
+
+    def __init__(self, db_handler, parent=None):
+        super().__init__(parent)
+        self.db = db_handler
+        self.available_jobs_map = {} # Mapování name -> label pro rychlé vyhledání při načítání dat
+
+        self.init_ui()
+        # Načteme práce z DB hned po inicializaci UI (pomocí časovače, aby se neblokoval start)
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(100, self.load_jobs_from_db)
+
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(5)
+
+        # --- Horní část: Přidávání prací ---
+        top_layout = QHBoxLayout()
+        
+        self.job_combo = QComboBox()
+        self.job_combo.setPlaceholderText("Načítám práce...")
+        # Nastavíme, aby šlo v comboboxu vyhledávat psaním
+        self.job_combo.setEditable(True)
+        self.job_combo.lineEdit().setPlaceholderText("Psaním hledejte práci...")
+        self.job_combo.completer().setCompletionMode(QCompleter.CompletionMode.PopupCompletion)
+        self.job_combo.setInsertPolicy(QComboBox.InsertPolicy.NoInsert)
+        self.job_combo.setEnabled(False) # Deaktivováno dokud se nenačtou data
+
+        add_btn = QPushButton("Přidat práci")
+        add_btn.clicked.connect(self.add_selected_job)
+
+        top_layout.addWidget(self.job_combo, 1) # Stretch factor 1 aby zabral místo
+        top_layout.addWidget(add_btn)
+        layout.addLayout(top_layout)
+
+        # --- Hlavní část: Tabulka vybraných prací ---
+        self.table = QTableWidget(0, 3)
+        self.table.setHorizontalHeaderLabels(["Práce (Label)", "Min. Grade", ""])
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        # Nastavení pevných šířek pro grade a delete tlačítko
+        self.table.setColumnWidth(1, 80)
+        self.table.setColumnWidth(2, 40)
+        # Skryjeme vertikální hlavičku (čísla řádků)
+        self.table.verticalHeader().setVisible(False)
+
+        layout.addWidget(self.table)
+
+    def load_jobs_from_db(self):
+        """Načte práce z DB a naplní ComboBox."""
+        self.job_combo.clear()
+        self.available_jobs_map = {}
+        jobs = []
+        
+        if self.db:
+            jobs = self.db.get_all_jobs() 
+
+        if not jobs:
+            self.job_combo.setPlaceholderText("Žádné práce nenalezeny")
+            self.job_combo.setEnabled(False)
+            return
+        
+        self.job_combo.setPlaceholderText("Vyberte práci...")
+        self.job_combo.setEnabled(True)
+
+        for job in jobs:
+            name = job.get('name')
+            label = job.get('label', name) # Pokud chybí label, použije se name
+            
+            if not name: continue
+            
+            # Uložíme do mapy pro pozdější použití v setData
+            self.available_jobs_map[name] = label
+            
+            # Do comboboxu dáme Label pro zobrazení, ale Name jako skrytá data
+            self.job_combo.addItem(f"{label} ({name})", name)
+        
+        self.job_combo.setCurrentIndex(-1) # Nic nevybráno na začátku
+
+    def add_selected_job(self):
+        """Přidá aktuálně vybranou práci z ComboBoxu do tabulky."""
+        job_name = self.job_combo.currentData()
+        if not job_name: return
+        
+        # Získáme label z mapy, nebo použijeme jméno, pokud není v mapě
+        job_label = self.available_jobs_map.get(job_name, job_name)
+        display_text = f"{job_label} ({job_name})"
+
+        self._add_row_to_table(job_name, display_text, grade_val=0)
+        self.dataChanged.emit()
+
+    def _add_row_to_table(self, job_name, display_text, grade_val=0):
+        """Interní metoda pro vložení řádku do tabulky."""
+        # Kontrola duplicit
+        for row in range(self.table.rowCount()):
+            # Získáme uložené jméno práce z prvního sloupce
+            stored_name = self.table.item(row, 0).data(Qt.ItemDataRole.UserRole)
+            if stored_name == job_name:
+                # Práce už tam je, jen upozorníme a končíme
+                QMessageBox.warning(self, "Duplikát", f"Práce '{display_text}' je již v seznamu.")
+                return
+
+        row = self.table.rowCount()
+        self.table.insertRow(row)
+
+        # 1. Sloupec: Label práce (Name je schované v UserRole data)
+        label_item = QTableWidgetItem(display_text)
+        # DŮLEŽITÉ: Uložíme si interní 'name' práce
+        label_item.setData(Qt.ItemDataRole.UserRole, job_name) 
+        self.table.setItem(row, 0, label_item)
+
+        # 2. Sloupec: SpinBox pro Grade
+        spinbox = QSpinBox()
+        spinbox.setRange(0, 999) # Rozsah grade
+        spinbox.setValue(int(grade_val))
+        spinbox.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        # Styl pro spinbox, aby vypadal lépe v tabulce
+        spinbox.setStyleSheet("QSpinBox { border: 1px solid #ccc; background: transparent; }")
+        # Napojení na signál změny
+        spinbox.valueChanged.connect(self.dataChanged.emit)
+        self.table.setCellWidget(row, 1, spinbox)
+
+        # 3. Sloupec: Tlačítko Smazat
+        del_btn = QPushButton("X")
+        del_btn.setFixedWidth(30)
+        del_btn.setStyleSheet("QPushButton { color: white; background-color: #e74c3c; font-weight: bold; border: none; border-radius: 3px; } QPushButton:hover { background-color: #c0392b; }")
+        # Použijeme lambda funkci, která si "zapamatuje" aktuální řádek pro smazání
+        del_btn.clicked.connect(lambda _, r=row: self.remove_row(r))
+        self.table.setCellWidget(row, 2, del_btn)
+        
+        # Nastavíme výšku řádku, aby se tam prvky hezky vešly
+        self.table.setRowHeight(row, 30)
+
+    def remove_row(self, row_index):
+        """Odstraní řádek z tabulky. Musíme znovu napojit tlačítka, protože se indexy posunou."""
+        self.table.removeRow(row_index)
+        # Přeindexování tlačítek pro smazání u zbylých řádků
+        for r in range(self.table.rowCount()):
+            btn = self.table.cellWidget(r, 2)
+            if btn:
+                try: btn.clicked.disconnect()
+                except: pass
+                btn.clicked.connect(lambda _, new_r=r: self.remove_row(new_r))
+        self.dataChanged.emit()
+
+    def getData(self):
+        """Vrátí JSON string ve formátu [{"job": "name", "grade": int}, ...] nebo None."""
+        if self.table.rowCount() == 0:
+            return None
+        
+        result_list = []
+        for row in range(self.table.rowCount()):
+            # Získáme interní jméno práce z UserRole prvního sloupce
+            job_name_item = self.table.item(row, 0)
+            if not job_name_item: continue
+            job_name = job_name_item.data(Qt.ItemDataRole.UserRole)
+            
+            # Získáme hodnotu grade ze spinboxu ve druhém sloupci
+            spinbox = self.table.cellWidget(row, 1)
+            grade_val = spinbox.value() if spinbox else 0
+            
+            if job_name:
+                result_list.append({
+                    "job": job_name,
+                    "grade": grade_val
+                })
+        
+        if not result_list:
+            return None
+            
+        # Vrátíme jako formátovaný JSON string (bez UTF-8 escapování pro čitelnost v DB)
+        return json.dumps(result_list, indent=4, ensure_ascii=False)
+
+    def setData(self, json_data_str):
+        """Načte JSON string a naplní tabulku."""
+        self.clear()
+        if not json_data_str or not json_data_str.strip():
+            return
+
+        try:
+            data_list = json.loads(json_data_str)
+        except (json.JSONDecodeError, TypeError):
+            # Pokud data nejsou validní JSON, ignorujeme je (nebo je to prázdné)
+            return
+            
+        if not isinstance(data_list, list):
+            return
+
+        # Dočasně zablokujeme signály, abychom nespouštěli dataChanged při načítání
+        self.blockSignals(True)
+        for item in data_list:
+            if not isinstance(item, dict): continue
+            
+            job_name = item.get("job")
+            grade = item.get("grade", 0)
+            
+            if not job_name: continue
+
+            # Najdeme label pro dané jméno práce z mapy načtené z DB
+            job_label = self.available_jobs_map.get(job_name, job_name)
+            display_text = f"{job_label} ({job_name})"
+            
+            # Vložení řádku pomocí interní metody
+            self._add_row_to_table(job_name, display_text, grade_val=grade)
+            
+        self.blockSignals(False)
+
+    def clear(self):
+        """Vymaže celou tabulku."""
+        self.table.setRowCount(0)
+        self.job_combo.setCurrentIndex(-1)

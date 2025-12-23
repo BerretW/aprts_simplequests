@@ -13,7 +13,7 @@ class QuestEditor(QMainWindow):
         self.current_quest_id = None
         self._is_dirty = False
 
-        self.setWindowTitle("APRTS SimpleQuest Editor V2.0 - Modular") 
+        self.setWindowTitle("APRTS SimpleQuest Editor V2.1 - Modular") 
         self.setGeometry(100, 100, 1250, 850)
 
         self.init_ui()
